@@ -1,22 +1,31 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Transport SaaS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: companies
+  - name: users
+  - name: agencies
+  - name: destinations
+  - name: vehicles
+  - name: trips
+  - name: reservations
+  - name: baggage
+  - name: boarding
+  - name: payments
+  - name: reports
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +33,1790 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─────────────── COMPANIES ───────────────
+  /companies:
+    get:
+      operationId: listCompanies
+      tags: [companies]
+      summary: List all companies
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Company"
+    post:
+      operationId: createCompany
+      tags: [companies]
+      summary: Create a company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  /companies/{id}:
+    get:
+      operationId: getCompany
+      tags: [companies]
+      summary: Get a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+    patch:
+      operationId: updateCompany
+      tags: [companies]
+      summary: Update a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompanyUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+    delete:
+      operationId: deleteCompany
+      tags: [companies]
+      summary: Delete a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─────────────── USERS ───────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List users
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: role
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─────────────── AGENCIES ───────────────
+  /agencies:
+    get:
+      operationId: listAgencies
+      tags: [agencies]
+      summary: List agencies
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agency"
+    post:
+      operationId: createAgency
+      tags: [agencies]
+      summary: Create an agency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgencyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+
+  /agencies/{id}:
+    get:
+      operationId: getAgency
+      tags: [agencies]
+      summary: Get an agency
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+    patch:
+      operationId: updateAgency
+      tags: [agencies]
+      summary: Update an agency
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgencyUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+    delete:
+      operationId: deleteAgency
+      tags: [agencies]
+      summary: Delete an agency
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─────────────── DESTINATIONS ───────────────
+  /destinations:
+    get:
+      operationId: listDestinations
+      tags: [destinations]
+      summary: List destinations
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Destination"
+    post:
+      operationId: createDestination
+      tags: [destinations]
+      summary: Create a destination
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DestinationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Destination"
+
+  /destinations/{id}:
+    get:
+      operationId: getDestination
+      tags: [destinations]
+      summary: Get a destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Destination"
+    patch:
+      operationId: updateDestination
+      tags: [destinations]
+      summary: Update a destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DestinationUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Destination"
+    delete:
+      operationId: deleteDestination
+      tags: [destinations]
+      summary: Delete a destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─────────────── VEHICLES ───────────────
+  /vehicles:
+    get:
+      operationId: listVehicles
+      tags: [vehicles]
+      summary: List vehicles
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Create a vehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      summary: Get a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+    patch:
+      operationId: updateVehicle
+      tags: [vehicles]
+      summary: Update a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+    delete:
+      operationId: deleteVehicle
+      tags: [vehicles]
+      summary: Delete a vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # ─────────────── TRIPS ───────────────
+  /trips:
+    get:
+      operationId: listTrips
+      tags: [trips]
+      summary: List trips
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: destinationId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trip"
+    post:
+      operationId: createTrip
+      tags: [trips]
+      summary: Create a trip
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+
+  /trips/{id}:
+    get:
+      operationId: getTrip
+      tags: [trips]
+      summary: Get a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+    patch:
+      operationId: updateTrip
+      tags: [trips]
+      summary: Update a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TripUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+    delete:
+      operationId: deleteTrip
+      tags: [trips]
+      summary: Delete a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /trips/{id}/cancel:
+    patch:
+      operationId: cancelTrip
+      tags: [trips]
+      summary: Cancel a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+
+  /trips/{id}/close:
+    patch:
+      operationId: closeTrip
+      tags: [trips]
+      summary: Close a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+
+  /trips/{id}/manifest:
+    get:
+      operationId: getTripManifest
+      tags: [trips]
+      summary: Get passenger manifest for a trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripManifest"
+
+  # ─────────────── RESERVATIONS ───────────────
+  /reservations:
+    get:
+      operationId: listReservations
+      tags: [reservations]
+      summary: List reservations
+      parameters:
+        - name: tripId
+          in: query
+          schema:
+            type: integer
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Reservation"
+    post:
+      operationId: createReservation
+      tags: [reservations]
+      summary: Create a reservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+
+  /reservations/{id}:
+    get:
+      operationId: getReservation
+      tags: [reservations]
+      summary: Get a reservation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+    patch:
+      operationId: updateReservation
+      tags: [reservations]
+      summary: Update a reservation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReservationUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+    delete:
+      operationId: deleteReservation
+      tags: [reservations]
+      summary: Cancel/delete a reservation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /reservations/{id}/board:
+    patch:
+      operationId: boardPassenger
+      tags: [reservations]
+      summary: Mark passenger as boarded
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reservation"
+
+  # ─────────────── BAGGAGE ───────────────
+  /baggage:
+    get:
+      operationId: listBaggage
+      tags: [baggage]
+      summary: List baggage items
+      parameters:
+        - name: reservationId
+          in: query
+          schema:
+            type: integer
+        - name: tripId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Baggage"
+    post:
+      operationId: createBaggage
+      tags: [baggage]
+      summary: Register baggage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BaggageInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Baggage"
+
+  /baggage/{id}:
+    get:
+      operationId: getBaggage
+      tags: [baggage]
+      summary: Get a baggage item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Baggage"
+    patch:
+      operationId: updateBaggage
+      tags: [baggage]
+      summary: Update a baggage item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BaggageUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Baggage"
+
+  # ─────────────── PAYMENTS ───────────────
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List payments
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: reservationId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: createPayment
+      tags: [payments]
+      summary: Record a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  /payments/{id}:
+    get:
+      operationId: getPayment
+      tags: [payments]
+      summary: Get a payment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+    patch:
+      operationId: updatePayment
+      tags: [payments]
+      summary: Update a payment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+
+  # ─────────────── REPORTS / WOW ENDPOINTS ───────────────
+  /reports/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [reports]
+      summary: Get dashboard statistics
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /reports/revenue:
+    get:
+      operationId: getRevenueReport
+      tags: [reports]
+      summary: Revenue report by period
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RevenuePoint"
+
+  /reports/occupancy:
+    get:
+      operationId: getOccupancyReport
+      tags: [reports]
+      summary: Seat occupancy rates by trip/destination
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OccupancyPoint"
+
+  /reports/top-destinations:
+    get:
+      operationId: getTopDestinations
+      tags: [reports]
+      summary: Most popular destinations
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DestinationStat"
+
+  /reports/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [reports]
+      summary: Recent reservations and actions
+      parameters:
+        - name: companyId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    # ─── Company ───
+    Company:
+      type: object
+      required: [id, name, country, currency, status, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        logo:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        taxNumber:
+          type: ["string", "null"]
+        country:
+          type: string
+        currency:
+          type: string
+        language:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, inactive]
+        createdAt:
+          type: string
+
+    CompanyInput:
+      type: object
+      required: [name, country, currency]
+      properties:
+        name:
+          type: string
+        logo:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        taxNumber:
+          type: ["string", "null"]
+        country:
+          type: string
+        currency:
+          type: string
+        language:
+          type: string
+
+    CompanyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        logo:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        taxNumber:
+          type: ["string", "null"]
+        country:
+          type: string
+        currency:
+          type: string
+        language:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended, inactive]
+
+    # ─── User ───
+    User:
+      type: object
+      required: [id, name, email, role, companyId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, company_admin, agency_manager, booking_agent, boarding_agent, controller, accountant, driver, client]
+        companyId:
+          type: ["integer", "null"]
+        agencyId:
+          type: ["integer", "null"]
+        phone:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        createdAt:
+          type: string
+
+    UserInput:
+      type: object
+      required: [name, email, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, company_admin, agency_manager, booking_agent, boarding_agent, controller, accountant, driver, client]
+        companyId:
+          type: ["integer", "null"]
+        agencyId:
+          type: ["integer", "null"]
+        phone:
+          type: ["string", "null"]
+        password:
+          type: string
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, company_admin, agency_manager, booking_agent, boarding_agent, controller, accountant, driver, client]
+        agencyId:
+          type: ["integer", "null"]
+        phone:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+
+    # ─── Agency ───
+    Agency:
+      type: object
+      required: [id, name, city, country, companyId, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        address:
+          type: ["string", "null"]
+        companyId:
+          type: integer
+        managerId:
+          type: ["integer", "null"]
+        managerName:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+
+    AgencyInput:
+      type: object
+      required: [name, city, country, companyId]
+      properties:
+        name:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        address:
+          type: ["string", "null"]
+        companyId:
+          type: integer
+        managerId:
+          type: ["integer", "null"]
+
+    AgencyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        address:
+          type: ["string", "null"]
+        managerId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [active, inactive]
+
+    # ─── Destination ───
+    Destination:
+      type: object
+      required: [id, originCity, destinationCity, companyId, basePrice, status, createdAt]
+      properties:
+        id:
+          type: integer
+        originCity:
+          type: string
+        destinationCity:
+          type: string
+        distanceKm:
+          type: ["number", "null"]
+        estimatedDurationMin:
+          type: ["integer", "null"]
+        basePrice:
+          type: number
+        companyId:
+          type: integer
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+
+    DestinationInput:
+      type: object
+      required: [originCity, destinationCity, basePrice, companyId]
+      properties:
+        originCity:
+          type: string
+        destinationCity:
+          type: string
+        distanceKm:
+          type: ["number", "null"]
+        estimatedDurationMin:
+          type: ["integer", "null"]
+        basePrice:
+          type: number
+        companyId:
+          type: integer
+
+    DestinationUpdate:
+      type: object
+      properties:
+        originCity:
+          type: string
+        destinationCity:
+          type: string
+        distanceKm:
+          type: ["number", "null"]
+        estimatedDurationMin:
+          type: ["integer", "null"]
+        basePrice:
+          type: number
+        status:
+          type: string
+          enum: [active, inactive]
+
+    # ─── Vehicle ───
+    Vehicle:
+      type: object
+      required: [id, licensePlate, type, brand, seatCount, companyId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        licensePlate:
+          type: string
+        type:
+          type: string
+          enum: [bus, minibus, van, ferry, train]
+        brand:
+          type: string
+        model:
+          type: ["string", "null"]
+        year:
+          type: ["integer", "null"]
+        seatCount:
+          type: integer
+        companyId:
+          type: integer
+        status:
+          type: string
+          enum: [available, in_service, maintenance, retired]
+        insuranceExpiry:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    VehicleInput:
+      type: object
+      required: [licensePlate, type, brand, seatCount, companyId]
+      properties:
+        licensePlate:
+          type: string
+        type:
+          type: string
+          enum: [bus, minibus, van, ferry, train]
+        brand:
+          type: string
+        model:
+          type: ["string", "null"]
+        year:
+          type: ["integer", "null"]
+        seatCount:
+          type: integer
+        companyId:
+          type: integer
+        insuranceExpiry:
+          type: ["string", "null"]
+
+    VehicleUpdate:
+      type: object
+      properties:
+        licensePlate:
+          type: string
+        type:
+          type: string
+          enum: [bus, minibus, van, ferry, train]
+        brand:
+          type: string
+        model:
+          type: ["string", "null"]
+        year:
+          type: ["integer", "null"]
+        seatCount:
+          type: integer
+        status:
+          type: string
+          enum: [available, in_service, maintenance, retired]
+        insuranceExpiry:
+          type: ["string", "null"]
+
+    # ─── Trip ───
+    Trip:
+      type: object
+      required: [id, departureDate, departureTime, destinationId, vehicleId, companyId, price, status, seatsAvailable, seatsTotal, createdAt]
+      properties:
+        id:
+          type: integer
+        departureDate:
+          type: string
+        departureTime:
+          type: string
+        arrivalDate:
+          type: ["string", "null"]
+        arrivalTime:
+          type: ["string", "null"]
+        destinationId:
+          type: integer
+        originCity:
+          type: ["string", "null"]
+        destinationCity:
+          type: ["string", "null"]
+        vehicleId:
+          type: integer
+        vehicleLicensePlate:
+          type: ["string", "null"]
+        driverId:
+          type: ["integer", "null"]
+        driverName:
+          type: ["string", "null"]
+        companyId:
+          type: integer
+        price:
+          type: number
+        status:
+          type: string
+          enum: [scheduled, boarding, departed, arrived, cancelled, delayed]
+        seatsAvailable:
+          type: integer
+        seatsTotal:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    TripInput:
+      type: object
+      required: [departureDate, departureTime, destinationId, vehicleId, companyId, price]
+      properties:
+        departureDate:
+          type: string
+        departureTime:
+          type: string
+        arrivalDate:
+          type: ["string", "null"]
+        arrivalTime:
+          type: ["string", "null"]
+        destinationId:
+          type: integer
+        vehicleId:
+          type: integer
+        driverId:
+          type: ["integer", "null"]
+        companyId:
+          type: integer
+        price:
+          type: number
+        notes:
+          type: ["string", "null"]
+
+    TripUpdate:
+      type: object
+      properties:
+        departureDate:
+          type: string
+        departureTime:
+          type: string
+        arrivalDate:
+          type: ["string", "null"]
+        arrivalTime:
+          type: ["string", "null"]
+        vehicleId:
+          type: integer
+        driverId:
+          type: ["integer", "null"]
+        price:
+          type: number
+        status:
+          type: string
+          enum: [scheduled, boarding, departed, arrived, cancelled, delayed]
+        notes:
+          type: ["string", "null"]
+
+    TripManifest:
+      type: object
+      required: [tripId, departureDate, originCity, destinationCity, passengers]
+      properties:
+        tripId:
+          type: integer
+        departureDate:
+          type: string
+        departureTime:
+          type: string
+        originCity:
+          type: string
+        destinationCity:
+          type: string
+        vehicleLicensePlate:
+          type: string
+        driverName:
+          type: ["string", "null"]
+        totalSeats:
+          type: integer
+        bookedSeats:
+          type: integer
+        boardedCount:
+          type: integer
+        passengers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PassengerManifestItem"
+
+    PassengerManifestItem:
+      type: object
+      required: [reservationId, passengerName, seatNumber, status]
+      properties:
+        reservationId:
+          type: integer
+        passengerName:
+          type: string
+        seatNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [reserved, paid, boarded, absent, cancelled]
+        baggageCount:
+          type: integer
+
+    # ─── Reservation ───
+    Reservation:
+      type: object
+      required: [id, tripId, passengerName, passengerPhone, seatNumber, price, status, createdAt]
+      properties:
+        id:
+          type: integer
+        tripId:
+          type: integer
+        originCity:
+          type: ["string", "null"]
+        destinationCity:
+          type: ["string", "null"]
+        departureDate:
+          type: ["string", "null"]
+        passengerName:
+          type: string
+        passengerPhone:
+          type: string
+        passengerEmail:
+          type: ["string", "null"]
+        passengerIdNumber:
+          type: ["string", "null"]
+        seatNumber:
+          type: ["string", "null"]
+        price:
+          type: number
+        status:
+          type: string
+          enum: [reserved, paid, boarded, absent, cancelled]
+        ticketCode:
+          type: string
+        agencyId:
+          type: ["integer", "null"]
+        agentId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ReservationInput:
+      type: object
+      required: [tripId, passengerName, passengerPhone, price]
+      properties:
+        tripId:
+          type: integer
+        passengerName:
+          type: string
+        passengerPhone:
+          type: string
+        passengerEmail:
+          type: ["string", "null"]
+        passengerIdNumber:
+          type: ["string", "null"]
+        seatNumber:
+          type: ["string", "null"]
+        price:
+          type: number
+        agencyId:
+          type: ["integer", "null"]
+        agentId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+
+    ReservationUpdate:
+      type: object
+      properties:
+        passengerName:
+          type: string
+        passengerPhone:
+          type: string
+        passengerEmail:
+          type: ["string", "null"]
+        seatNumber:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [reserved, paid, boarded, absent, cancelled]
+        notes:
+          type: ["string", "null"]
+
+    # ─── Baggage ───
+    Baggage:
+      type: object
+      required: [id, reservationId, trackingCode, weight, type, price, status, createdAt]
+      properties:
+        id:
+          type: integer
+        reservationId:
+          type: integer
+        trackingCode:
+          type: string
+        weight:
+          type: number
+        type:
+          type: string
+          enum: [standard, fragile, oversized, valuable]
+        price:
+          type: number
+        status:
+          type: string
+          enum: [registered, loaded, delivered, lost]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    BaggageInput:
+      type: object
+      required: [reservationId, weight, type, price]
+      properties:
+        reservationId:
+          type: integer
+        weight:
+          type: number
+        type:
+          type: string
+          enum: [standard, fragile, oversized, valuable]
+        price:
+          type: number
+        notes:
+          type: ["string", "null"]
+
+    BaggageUpdate:
+      type: object
+      properties:
+        weight:
+          type: number
+        type:
+          type: string
+          enum: [standard, fragile, oversized, valuable]
+        price:
+          type: number
+        status:
+          type: string
+          enum: [registered, loaded, delivered, lost]
+        notes:
+          type: ["string", "null"]
+
+    # ─── Payment ───
+    Payment:
+      type: object
+      required: [id, reservationId, amount, method, status, createdAt]
+      properties:
+        id:
+          type: integer
+        reservationId:
+          type: integer
+        amount:
+          type: number
+        method:
+          type: string
+          enum: [cash, card, mobile_money, bank_transfer]
+        status:
+          type: string
+          enum: [pending, completed, refunded, failed]
+        reference:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    PaymentInput:
+      type: object
+      required: [reservationId, amount, method]
+      properties:
+        reservationId:
+          type: integer
+        amount:
+          type: number
+        method:
+          type: string
+          enum: [cash, card, mobile_money, bank_transfer]
+        reference:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    PaymentUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, completed, refunded, failed]
+        reference:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    # ─── Reports ───
+    DashboardStats:
+      type: object
+      required: [totalRevenue, totalTrips, totalReservations, totalPassengers, activeVehicles, upcomingTrips, occupancyRate, revenueToday]
+      properties:
+        totalRevenue:
+          type: number
+        totalTrips:
+          type: integer
+        totalReservations:
+          type: integer
+        totalPassengers:
+          type: integer
+        activeVehicles:
+          type: integer
+        upcomingTrips:
+          type: integer
+        occupancyRate:
+          type: number
+        revenueToday:
+          type: number
+        reservationsToday:
+          type: integer
+        tripsToday:
+          type: integer
+
+    RevenuePoint:
+      type: object
+      required: [period, revenue, reservations]
+      properties:
+        period:
+          type: string
+        revenue:
+          type: number
+        reservations:
+          type: integer
+
+    OccupancyPoint:
+      type: object
+      required: [route, totalSeats, bookedSeats, occupancyRate]
+      properties:
+        route:
+          type: string
+        totalSeats:
+          type: integer
+        bookedSeats:
+          type: integer
+        occupancyRate:
+          type: number
+
+    DestinationStat:
+      type: object
+      required: [route, tripCount, reservationCount, revenue]
+      properties:
+        route:
+          type: string
+        tripCount:
+          type: integer
+        reservationCount:
+          type: integer
+        revenue:
+          type: number
+
+    ActivityItem:
+      type: object
+      required: [id, type, description, timestamp]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [reservation_created, payment_received, trip_departed, trip_cancelled, passenger_boarded]
+        description:
+          type: string
+        entityId:
+          type: integer
+        timestamp:
+          type: string
