@@ -66,9 +66,12 @@ router.post("/reservations", async (req, res): Promise<void> => {
     ticketCode,
   }).returning();
   // Decrement available seats
-  await db.update(tripsTable)
-    .set({ seatsAvailable: eq(tripsTable.seatsAvailable, 0) ? 0 : (await db.select().from(tripsTable).where(eq(tripsTable.id, parsed.data.tripId)))[0]?.seatsAvailable ?? 0 })
-    .where(eq(tripsTable.id, parsed.data.tripId));
+  const [currentTrip] = await db.select().from(tripsTable).where(eq(tripsTable.id, parsed.data.tripId));
+  if (currentTrip && currentTrip.seatsAvailable > 0) {
+    await db.update(tripsTable)
+      .set({ seatsAvailable: currentTrip.seatsAvailable - 1 })
+      .where(eq(tripsTable.id, parsed.data.tripId));
+  }
   res.status(201).json(GetReservationResponse.parse(await enrichReservation(reservation)));
 });
 
