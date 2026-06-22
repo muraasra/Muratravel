@@ -5,6 +5,7 @@ import {
   Building2,
   CreditCard,
   LayoutDashboard,
+  Luggage,
   Map,
   Navigation,
   Settings,
@@ -27,6 +28,7 @@ const navGroupes = [
       { titre: "Voyages", href: "/trips", icon: Navigation },
       { titre: "Réservations", href: "/reservations", icon: Ticket },
       { titre: "Embarquement", href: "/boarding", icon: ScanLine },
+      { titre: "Bagages", href: "/baggage", icon: Luggage },
     ],
   },
   {

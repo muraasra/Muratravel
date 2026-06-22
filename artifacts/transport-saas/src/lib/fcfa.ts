@@ -118,3 +118,45 @@ export function formatDateHeure(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(dateStr));
 }
+
+export const TYPE_BAGAGE: Record<string, string> = {
+  standard: "Standard",
+  fragile: "Fragile",
+  oversized: "Hors gabarit",
+  valuable: "Valeur déclarée",
+  perishable: "Denrée périssable",
+};
+
+export const STATUT_BAGAGE: Record<string, string> = {
+  registered: "Enregistré",
+  checked: "Vérifié",
+  loaded: "Chargé",
+  delivered: "Livré",
+  lost: "Perdu",
+  damaged: "Endommagé",
+};
+
+export function couleurStatutBagage(status: string) {
+  switch (status) {
+    case "registered": return "bg-blue-500/10 text-blue-600 border-blue-200";
+    case "checked": return "bg-amber-500/10 text-amber-600 border-amber-200";
+    case "loaded": return "bg-violet-500/10 text-violet-600 border-violet-200";
+    case "delivered": return "bg-emerald-500/10 text-emerald-600 border-emerald-200";
+    case "lost": return "bg-red-500/10 text-red-600 border-red-200";
+    case "damaged": return "bg-orange-500/10 text-orange-600 border-orange-200";
+    default: return "bg-slate-500/10 text-slate-600 border-slate-200";
+  }
+}
+
+export const TARIF_BAGAGE: Record<string, number> = {
+  standard: 500,
+  fragile: 1500,
+  oversized: 2000,
+  valuable: 3000,
+  perishable: 1000,
+};
+
+export function iconeStatutBagage(status: string) {
+  const ordre = ["registered", "checked", "loaded", "delivered"];
+  return ordre.indexOf(status);
+}

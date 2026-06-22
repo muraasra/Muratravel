@@ -19,6 +19,7 @@ import Boarding from "@/pages/boarding";
 import Payments from "@/pages/payments";
 import Users from "@/pages/users";
 import Reports from "@/pages/reports";
+import Baggage from "@/pages/baggage";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ function Router() {
         <Route path="/payments" component={Payments} />
         <Route path="/users" component={Users} />
         <Route path="/reports" component={Reports} />
+        <Route path="/baggage" component={Baggage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>
