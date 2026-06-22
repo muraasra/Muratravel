@@ -10,7 +10,7 @@ export default function DetailCompagnie() {
   const [, navigate] = useLocation();
   const id = params?.id ? parseInt(params.id, 10) : 0;
 
-  const { data: company, isLoading } = useGetCompany(id, { query: { enabled: !!id } });
+  const { data: company, isLoading } = useGetCompany(id, { query: { enabled: !!id, queryKey: [`/api/companies/${id}`] } });
 
   if (isLoading) {
     return (

@@ -89,7 +89,7 @@ export default function GestionBagages() {
       await createBaggage.mutateAsync({
         data: {
           reservationId: parseInt(form.reservationId),
-          type: form.type as "standard" | "fragile" | "oversized" | "valuable" | "perishable",
+          type: form.type as "standard" | "fragile" | "oversized" | "valuable",
           weight: parseFloat(form.weight),
           price: parseFloat(form.price),
           notes: form.notes || undefined,

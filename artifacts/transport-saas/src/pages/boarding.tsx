@@ -15,7 +15,7 @@ export default function Embarquement() {
   const [tripIdSelectionne, setTripIdSelectionne] = useState<number | null>(null);
   const { data: manifest, isLoading: manifestLoading } = useGetTripManifest(
     tripIdSelectionne ?? 0,
-    { query: { enabled: !!tripIdSelectionne } }
+    { query: { enabled: !!tripIdSelectionne, queryKey: [`/api/trips/${tripIdSelectionne}/manifest`] } }
   );
   const boardPassenger = useBoardPassenger();
   const qc = useQueryClient();

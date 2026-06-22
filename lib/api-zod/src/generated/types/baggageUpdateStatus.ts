@@ -11,7 +11,9 @@ export type BaggageUpdateStatus = typeof BaggageUpdateStatus[keyof typeof Baggag
 
 export const BaggageUpdateStatus = {
   registered: 'registered',
+  checked: 'checked',
   loaded: 'loaded',
   delivered: 'delivered',
   lost: 'lost',
+  damaged: 'damaged',
 } as const;

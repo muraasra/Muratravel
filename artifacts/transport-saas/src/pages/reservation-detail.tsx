@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useGetReservation, useBoardPassenger, useListBaggage, useCreateBaggage, useUpdateBaggage } from "@workspace/api-client-react";
 import { useRoute, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { QRCodeSVG } from "qrcode.react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -37,6 +38,7 @@ import {
   Package,
   Truck,
   PackageCheck,
+  Printer,
 } from "lucide-react";
 
 const FLUX_STATUT: Record<string, string | null> = {
@@ -64,13 +66,14 @@ export default function DetailReservation() {
   const [, navigate] = useLocation();
   const id = params?.id ? parseInt(params.id, 10) : 0;
 
-  const { data: reservation, isLoading } = useGetReservation(id, { query: { enabled: !!id } });
-  const { data: bagages } = useListBaggage({ reservationId: id }, { query: { enabled: !!id } });
+  const { data: reservation, isLoading } = useGetReservation(id, { query: { enabled: !!id, queryKey: [`/api/reservations/${id}`] } });
+  const { data: bagages } = useListBaggage({ reservationId: id }, { query: { enabled: !!id, queryKey: ["/api/baggage", { reservationId: id }] } });
   const boardPassenger = useBoardPassenger();
   const createBaggage = useCreateBaggage();
   const updateBaggage = useUpdateBaggage();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const [modalBagage, setModalBagage] = useState(false);
   const [formBagage, setFormBagage] = useState({
@@ -94,6 +97,41 @@ export default function DetailReservation() {
   const poidsTotalBagages = bagages?.reduce((s, b) => s + (b.weight ?? 0), 0) ?? 0;
   const totalFacture = (reservation.price ?? 0) + totalBagages;
 
+  const qrData = JSON.stringify({
+    code: reservation.ticketCode,
+    id: reservation.id,
+    passenger: reservation.passengerName,
+    seat: reservation.seatNumber,
+    route: `${reservation.originCity ?? ""}→${reservation.destinationCity ?? ""}`,
+    date: reservation.departureDate,
+  });
+
+  function imprimer() {
+    if (!reservation) return;
+    const contenu = printRef.current;
+    if (!contenu) return;
+    const fenetre = window.open("", "_blank", "width=400,height=600");
+    if (!fenetre) return;
+    fenetre.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Billet ${reservation.ticketCode}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; width: 80mm; background: white; }
+            @media print { @page { margin: 0; size: 80mm auto; } body { width: 80mm; } }
+          </style>
+        </head>
+        <body>${contenu.innerHTML}</body>
+      </html>
+    `);
+    fenetre.document.close();
+    fenetre.focus();
+    setTimeout(() => { fenetre.print(); }, 300);
+  }
+
   async function embarquer() {
     await boardPassenger.mutateAsync({ id });
     qc.invalidateQueries({ queryKey: [`/api/reservations/${id}`] });
@@ -115,7 +153,7 @@ export default function DetailReservation() {
       await createBaggage.mutateAsync({
         data: {
           reservationId: id,
-          type: formBagage.type as "standard" | "fragile" | "oversized" | "valuable" | "perishable",
+          type: formBagage.type as "standard" | "fragile" | "oversized" | "valuable",
           weight: parseFloat(formBagage.weight),
           price: parseFloat(formBagage.price),
           notes: formBagage.notes || undefined,
@@ -159,6 +197,9 @@ export default function DetailReservation() {
           <Badge variant="outline" className={couleurStatutReservation(reservation.status)}>
             {STATUT_RESERVATION[reservation.status] ?? reservation.status}
           </Badge>
+          <Button size="sm" variant="outline" className="gap-1" onClick={imprimer}>
+            <Printer className="h-4 w-4" /> Imprimer
+          </Button>
           {reservation.status !== "boarded" && reservation.status !== "cancelled" && (
             <Button size="sm" className="gap-1" onClick={embarquer} disabled={boardPassenger.isPending}>
               <CheckCircle2 className="h-4 w-4" />
@@ -168,12 +209,68 @@ export default function DetailReservation() {
         </div>
       </div>
 
-      {/* Billet */}
+      {/* Billet imprimable (caché visuellement mais utilisé pour print) */}
+      <div ref={printRef} style={{ display: "none" }}>
+        <div style={{ fontFamily: "Arial, sans-serif", width: "80mm", background: "white", color: "black" }}>
+          {/* Header */}
+          <div style={{ background: "#1e40af", color: "white", padding: "10px 12px" }}>
+            <div style={{ fontWeight: "bold", fontSize: "14px" }}>MuraTravel</div>
+            <div style={{ fontSize: "10px", opacity: 0.8 }}>Billet de Voyage</div>
+          </div>
+          {/* Route */}
+          <div style={{ padding: "10px 12px", borderBottom: "1px dashed #ccc", textAlign: "center" }}>
+            <div style={{ fontSize: "18px", fontWeight: "bold" }}>
+              {reservation.originCity} → {reservation.destinationCity}
+            </div>
+            <div style={{ fontSize: "11px", color: "#666" }}>{formatDate(reservation.departureDate)}</div>
+          </div>
+          {/* Passager */}
+          <div style={{ padding: "8px 12px", borderBottom: "1px dashed #ccc" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: "9px", color: "#888" }}>PASSAGER</div>
+                <div style={{ fontWeight: "bold", fontSize: "13px" }}>{reservation.passengerName}</div>
+                <div style={{ fontSize: "10px" }}>{reservation.passengerPhone}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: "9px", color: "#888" }}>SIÈGE</div>
+                <div style={{ fontSize: "28px", fontWeight: "bold", color: "#1e40af" }}>{reservation.seatNumber ?? "—"}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: "6px", fontSize: "10px", color: "#555" }}>
+              Tarif: <strong>{formatFCFA(reservation.price)}</strong> ·
+              Bagages: <strong>{bagages?.length ?? 0}</strong>
+            </div>
+          </div>
+          {/* QR Code */}
+          <div style={{ padding: "10px 12px", display: "flex", gap: "12px", alignItems: "center", borderBottom: "1px dashed #ccc" }}>
+            <QRCodeSVG value={qrData} size={80} level="M" />
+            <div>
+              <div style={{ fontSize: "9px", color: "#888" }}>CODE BILLET</div>
+              <div style={{ fontFamily: "monospace", fontWeight: "bold", fontSize: "13px", color: "#1e40af", letterSpacing: "1px" }}>
+                {reservation.ticketCode}
+              </div>
+              <div style={{ marginTop: "4px", fontSize: "9px", color: "#888" }}>Scannable à l'embarquement</div>
+            </div>
+          </div>
+          {/* Coupon contrôle */}
+          <div style={{ padding: "6px 12px", background: "#f3f4f6", display: "flex", justifyContent: "space-between", fontSize: "10px" }}>
+            <span style={{ fontFamily: "monospace" }}>{reservation.ticketCode}</span>
+            <span>{reservation.passengerName.split(" ")[0]}</span>
+            <span>S.{reservation.seatNumber ?? "—"}</span>
+          </div>
+          <div style={{ textAlign: "center", padding: "4px", fontSize: "8px", color: "#aaa" }}>
+            MuraTravel · Voyage en toute sécurité
+          </div>
+        </div>
+      </div>
+
+      {/* Carte billet visible dans l'UI */}
       <Card className="border-2 border-primary/20 overflow-hidden">
         <div className="bg-primary/10 px-6 py-4 flex justify-between items-center border-b border-primary/10">
           <div className="flex items-center gap-2 text-primary font-bold text-lg">
             <Ticket className="h-5 w-5" />
-            E-Billet TransportHub
+            E-Billet MuraTravel
           </div>
           <div className="text-sm font-mono bg-white px-3 py-1.5 rounded border shadow-sm tracking-widest">
             {reservation.ticketCode || `TKT-${String(reservation.id).padStart(6, "0")}`}
@@ -225,7 +322,7 @@ export default function DetailReservation() {
             </div>
           </div>
 
-          {/* QR code et date */}
+          {/* QR Code réel */}
           <div className="mt-8 pt-8 border-t border-dashed">
             <div className="flex justify-between items-center">
               <div className="text-xs text-muted-foreground">
@@ -235,17 +332,15 @@ export default function DetailReservation() {
                   : "—"}
               </div>
               <div className="flex flex-col items-center">
-                <div className="w-20 h-20 bg-secondary rounded flex items-center justify-center border-2 border-border">
-                  <div className="grid grid-cols-3 gap-0.5 opacity-60">
-                    {Array.from({ length: 9 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`w-5 h-5 rounded-sm ${(i + reservation.id) % 3 !== 0 ? "bg-foreground" : "bg-transparent"}`}
-                      />
-                    ))}
-                  </div>
+                <div className="p-1.5 border-2 border-border rounded-lg bg-white shadow-sm">
+                  <QRCodeSVG
+                    value={qrData}
+                    size={80}
+                    level="M"
+                    includeMargin={false}
+                  />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">QR Code</p>
+                <p className="text-xs text-muted-foreground mt-1.5">Scanner à l'embarquement</p>
               </div>
             </div>
           </div>
@@ -268,7 +363,7 @@ export default function DetailReservation() {
         <CardContent>
           {!bagages || bagages.length === 0 ? (
             <div className="py-6 text-center text-muted-foreground text-sm">
-              Aucun bagage enregistré pour cette réservation.{" "}
+              Aucun bagage enregistré.{" "}
               <button className="text-primary hover:underline" onClick={() => setModalBagage(true)}>
                 Ajouter un bagage
               </button>
@@ -290,7 +385,6 @@ export default function DetailReservation() {
                   {bagages.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell>
-                        {/* Mini code-barres */}
                         <div className="flex flex-col gap-0.5">
                           <div className="flex gap-px h-5">
                             {Array.from(b.trackingCode ?? "").map((c, i) => (
@@ -339,7 +433,6 @@ export default function DetailReservation() {
                 </TableBody>
               </Table>
 
-              {/* Récap facturation */}
               <div className="mt-4 pt-4 border-t space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
@@ -414,13 +507,10 @@ export default function DetailReservation() {
                 />
               </div>
             </div>
-
-            {/* Total mis à jour */}
             <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2 flex justify-between">
-              <span className="text-sm text-muted-foreground">Nouveau total réservation</span>
+              <span className="text-sm text-muted-foreground">Nouveau total</span>
               <strong>{formatFCFA((reservation.price ?? 0) + totalBagages + (parseFloat(formBagage.price) || 0))}</strong>
             </div>
-
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setModalBagage(false)}>Annuler</Button>
               <Button type="submit" disabled={createBaggage.isPending}>

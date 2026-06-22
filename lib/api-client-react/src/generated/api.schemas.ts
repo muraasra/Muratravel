@@ -57,6 +57,7 @@ export interface CompanyInput {
   country: string;
   currency: string;
   language?: string;
+  status?: CompanyStatus;
 }
 
 export type CompanyUpdateStatus = typeof CompanyUpdateStatus[keyof typeof CompanyUpdateStatus];
@@ -153,6 +154,7 @@ export interface UserInput {
   /** @nullable */
   phone?: string | null;
   password?: string;
+  status?: UserStatus;
 }
 
 export type UserUpdateRole = typeof UserUpdateRole[keyof typeof UserUpdateRole];
@@ -205,6 +207,10 @@ export interface Agency {
   country: string;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
   companyId: number;
   /** @nullable */
   managerId?: number | null;
@@ -220,9 +226,14 @@ export interface AgencyInput {
   country: string;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  email?: string | null;
   companyId: number;
   /** @nullable */
   managerId?: number | null;
+  status?: AgencyStatus;
 }
 
 export type AgencyUpdateStatus = typeof AgencyUpdateStatus[keyof typeof AgencyUpdateStatus];
@@ -275,6 +286,7 @@ export interface DestinationInput {
   estimatedDurationMin?: number | null;
   basePrice: number;
   companyId: number;
+  status?: DestinationStatus;
 }
 
 export type DestinationUpdateStatus = typeof DestinationUpdateStatus[keyof typeof DestinationUpdateStatus];
@@ -357,6 +369,7 @@ export interface VehicleInput {
   companyId: number;
   /** @nullable */
   insuranceExpiry?: string | null;
+  status?: VehicleStatus;
 }
 
 export type VehicleUpdateType = typeof VehicleUpdateType[keyof typeof VehicleUpdateType];
@@ -451,6 +464,7 @@ export interface TripInput {
   price: number;
   /** @nullable */
   notes?: string | null;
+  status?: TripStatus;
 }
 
 export type TripUpdateStatus = typeof TripUpdateStatus[keyof typeof TripUpdateStatus];
@@ -573,6 +587,8 @@ export interface ReservationInput {
   agentId?: number | null;
   /** @nullable */
   notes?: string | null;
+  status?: ReservationStatus;
+  companyId?: number;
 }
 
 export type ReservationUpdateStatus = typeof ReservationUpdateStatus[keyof typeof ReservationUpdateStatus];
@@ -646,6 +662,7 @@ export interface BaggageInput {
   weight: number;
   type: BaggageInputType;
   price: number;
+  status?: BaggageStatus;
   /** @nullable */
   notes?: string | null;
 }
@@ -665,9 +682,11 @@ export type BaggageUpdateStatus = typeof BaggageUpdateStatus[keyof typeof Baggag
 
 export const BaggageUpdateStatus = {
   registered: 'registered',
+  checked: 'checked',
   loaded: 'loaded',
   delivered: 'delivered',
   lost: 'lost',
+  damaged: 'damaged',
 } as const;
 
 export interface BaggageUpdate {

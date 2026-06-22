@@ -7,3 +7,8 @@ export * from "./trips";
 export * from "./reservations";
 export * from "./baggage";
 export * from "./payments";
+export * from "./incidents";
+export * from "./audit_logs";
+export * from "./notifications";
+export * from "./finance";
+export * from "./subscriptions";

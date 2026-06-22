@@ -14,8 +14,8 @@ export default function DetailVoyage() {
   const [, navigate] = useLocation();
   const id = params?.id ? parseInt(params.id, 10) : 0;
 
-  const { data: trip, isLoading: tripLoading } = useGetTrip(id, { query: { enabled: !!id } });
-  const { data: manifest, isLoading: manifestLoading } = useGetTripManifest(id, { query: { enabled: !!id } });
+  const { data: trip, isLoading: tripLoading } = useGetTrip(id, { query: { enabled: !!id, queryKey: [`/api/trips/${id}`] } });
+  const { data: manifest, isLoading: manifestLoading } = useGetTripManifest(id, { query: { enabled: !!id, queryKey: [`/api/trips/${id}/manifest`] } });
   const cancelTrip = useCancelTrip();
   const closeTrip = useCloseTrip();
   const qc = useQueryClient();

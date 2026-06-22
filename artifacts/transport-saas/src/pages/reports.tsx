@@ -30,7 +30,7 @@ export default function Rapports() {
   const { data: topDest } = useGetTopDestinations({ limit: 6 });
 
   const totalRevenu = revenue?.reduce((s, r) => s + (r.revenue ?? 0), 0) ?? 0;
-  const totalReservations = revenue?.reduce((s, r) => s + (r.reservationCount ?? 0), 0) ?? 0;
+  const totalReservations = revenue?.reduce((s, r) => s + (r.reservations ?? 0), 0) ?? 0;
 
   return (
     <div className="space-y-6">

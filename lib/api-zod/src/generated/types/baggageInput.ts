@@ -6,12 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { BaggageInputType } from './baggageInputType';
+import type { BaggageStatus } from './baggageStatus';
 
 export interface BaggageInput {
   reservationId: number;
   weight: number;
   type: BaggageInputType;
   price: number;
+  status?: BaggageStatus;
   /** @nullable */
   notes?: string | null;
 }

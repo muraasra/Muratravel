@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { optionalAuth } from "./middlewares/auth";
 
 const app: Express = express();
 
@@ -28,6 +29,9 @@ app.use(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Attach Supabase user to requests when token is provided
+app.use(optionalAuth);
 
 app.use("/api", router);
 
