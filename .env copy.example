@@ -1,0 +1,5 @@
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=.env.example
+STRIPE_SECRET_KEY=...
+PASSWORD=FGFMyW4iDL271hvS
+# Add other vars

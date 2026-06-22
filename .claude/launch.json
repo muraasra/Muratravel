@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "muratravel-frontend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["exec", "vite", "--config", "artifacts/transport-saas/vite.config.ts", "--host", "0.0.0.0"],
+      "env": {
+        "PORT": "5173",
+        "BASE_PATH": "/"
+      },
+      "port": 5173
+    }
+  ]
+}
