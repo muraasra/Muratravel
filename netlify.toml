@@ -1,0 +1,56 @@
+# ============================================================================
+#  MuraTravel — configuration de déploiement Netlify
+# ============================================================================
+# Netlify héberge le FRONTEND (SPA React/Vite, 100% statique).
+# Le BACKEND Express est une API séparée (Render / Railway / Fly / VPS) OU une
+# fonction Netlify (voir netlify/functions/api.ts + section plus bas).
+#
+# Les appels du frontend partent en relatif vers /api/* : la règle de redirection
+# ci-dessous les renvoie vers votre backend, sans changer une ligne de code.
+# ============================================================================
+
+[build]
+  # Le monorepo est à la racine ; on construit le paquet frontend.
+  command = "corepack enable && pnpm install --no-frozen-lockfile && pnpm --filter @workspace/transport-saas build"
+  publish = "artifacts/transport-saas/dist/public"
+
+[build.environment]
+  NODE_VERSION = "20"
+  PNPM_VERSION = "10"
+  # base du routeur (BrowserRouter) — garder "/"
+  BASE_PATH = "/"
+  # NB : définissez aussi dans l'UI Netlify (Site settings → Environment) :
+  #   VITE_SUPABASE_URL       = https://VOTRE-PROJET.supabase.co
+  #   VITE_SUPABASE_ANON_KEY  = eyJ...   (clé anon, jamais la service_role)
+
+# --- Proxy de l'API -------------------------------------------------------
+# OPTION A (recommandée) : backend déployé séparément.
+# Remplacez l'URL par celle de votre API (ex. https://muratravel-api.onrender.com).
+[[redirects]]
+  from = "/api/*"
+  to = "https://VOTRE-BACKEND.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# OPTION B (tout-en-un) : API en fonction Netlify. Commentez l'option A et
+# décommentez ci-dessous (voir netlify/functions/api.ts).
+# [[redirects]]
+#   from = "/api/*"
+#   to = "/.netlify/functions/api/api/:splat"
+#   status = 200
+#   force = true
+
+# --- Fallback SPA ---------------------------------------------------------
+# Toute autre route est servie par l'app React (routing côté client).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Entêtes de sécurité de base.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

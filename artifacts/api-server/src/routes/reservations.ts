@@ -15,6 +15,7 @@ import {
   BoardPassengerResponse,
 } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
+import { tenantCompanyId } from "../middlewares/auth";
 
 const router = Router();
 
@@ -41,98 +42,70 @@ async function enrichReservation(r: typeof reservationsTable.$inferSelect) {
 
 router.get("/reservations", async (req, res): Promise<void> => {
   const qp = ListReservationsQueryParams.safeParse(req.query);
-  const conditions = [];
+  const conditions = [eq(reservationsTable.companyId, tenantCompanyId(req))];
   if (qp.success) {
     if (qp.data.tripId != null) conditions.push(eq(reservationsTable.tripId, qp.data.tripId));
     if (qp.data.status != null) conditions.push(eq(reservationsTable.status, qp.data.status));
   }
-  const rows = conditions.length
-    ? await db.select().from(reservationsTable).where(and(...conditions)).orderBy(reservationsTable.createdAt)
-    : await db.select().from(reservationsTable).orderBy(reservationsTable.createdAt);
+  const rows = await db.select().from(reservationsTable).where(and(...conditions)).orderBy(reservationsTable.createdAt);
   const enriched = await Promise.all(rows.map(enrichReservation));
   res.json(ListReservationsResponse.parse(enriched));
 });
 
 router.post("/reservations", async (req, res): Promise<void> => {
   const parsed = CreateReservationBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const companyId = tenantCompanyId(req);
+  // The trip must belong to the caller's company.
+  const [trip] = await db.select().from(tripsTable).where(and(eq(tripsTable.id, parsed.data.tripId), eq(tripsTable.companyId, companyId)));
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
   const ticketCode = `TKT-${randomBytes(4).toString("hex").toUpperCase()}`;
   const [reservation] = await db.insert(reservationsTable).values({
     ...parsed.data,
+    companyId,
     price: String(parsed.data.price),
     ticketCode,
   }).returning();
-  // Decrement available seats
-  const [currentTrip] = await db.select().from(tripsTable).where(eq(tripsTable.id, parsed.data.tripId));
-  if (currentTrip && currentTrip.seatsAvailable > 0) {
-    await db.update(tripsTable)
-      .set({ seatsAvailable: currentTrip.seatsAvailable - 1 })
-      .where(eq(tripsTable.id, parsed.data.tripId));
+  if (trip.seatsAvailable > 0) {
+    await db.update(tripsTable).set({ seatsAvailable: trip.seatsAvailable - 1 }).where(eq(tripsTable.id, trip.id));
   }
   res.status(201).json(GetReservationResponse.parse(await enrichReservation(reservation)));
 });
 
 router.get("/reservations/:id", async (req, res): Promise<void> => {
   const params = GetReservationParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [reservation] = await db.select().from(reservationsTable).where(eq(reservationsTable.id, params.data.id));
-  if (!reservation) {
-    res.status(404).json({ error: "Reservation not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [reservation] = await db.select().from(reservationsTable).where(and(eq(reservationsTable.id, params.data.id), eq(reservationsTable.companyId, tenantCompanyId(req))));
+  if (!reservation) { res.status(404).json({ error: "Reservation not found" }); return; }
   res.json(GetReservationResponse.parse(await enrichReservation(reservation)));
 });
 
 router.patch("/reservations/:id", async (req, res): Promise<void> => {
   const params = UpdateReservationParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateReservationBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const [reservation] = await db.update(reservationsTable).set(parsed.data).where(eq(reservationsTable.id, params.data.id)).returning();
-  if (!reservation) {
-    res.status(404).json({ error: "Reservation not found" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [reservation] = await db.update(reservationsTable).set(parsed.data)
+    .where(and(eq(reservationsTable.id, params.data.id), eq(reservationsTable.companyId, tenantCompanyId(req)))).returning();
+  if (!reservation) { res.status(404).json({ error: "Reservation not found" }); return; }
   res.json(UpdateReservationResponse.parse(await enrichReservation(reservation)));
 });
 
 router.delete("/reservations/:id", async (req, res): Promise<void> => {
   const params = DeleteReservationParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [reservation] = await db.delete(reservationsTable).where(eq(reservationsTable.id, params.data.id)).returning();
-  if (!reservation) {
-    res.status(404).json({ error: "Reservation not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [reservation] = await db.delete(reservationsTable)
+    .where(and(eq(reservationsTable.id, params.data.id), eq(reservationsTable.companyId, tenantCompanyId(req)))).returning();
+  if (!reservation) { res.status(404).json({ error: "Reservation not found" }); return; }
   res.sendStatus(204);
 });
 
 router.patch("/reservations/:id/board", async (req, res): Promise<void> => {
   const params = BoardPassengerParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [reservation] = await db.update(reservationsTable).set({ status: "boarded" }).where(eq(reservationsTable.id, params.data.id)).returning();
-  if (!reservation) {
-    res.status(404).json({ error: "Reservation not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [reservation] = await db.update(reservationsTable).set({ status: "boarded" })
+    .where(and(eq(reservationsTable.id, params.data.id), eq(reservationsTable.companyId, tenantCompanyId(req)))).returning();
+  if (!reservation) { res.status(404).json({ error: "Reservation not found" }); return; }
   res.json(BoardPassengerResponse.parse(await enrichReservation(reservation)));
 });
 

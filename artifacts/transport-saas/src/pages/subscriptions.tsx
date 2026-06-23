@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
+import { useMe } from "@/hooks/useMe";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,22 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { formatFCFA, formatDate } from "@/lib/fcfa";
-import { Crown, CheckCircle2, XCircle, Building2, Plus, RefreshCw } from "lucide-react";
+import { Crown, CheckCircle2, Building2, Plus, RefreshCw } from "lucide-react";
 
 type Plan = "starter" | "business" | "enterprise";
 type StatutAbonnement = "actif" | "expire" | "suspendu" | "essai";
 
 interface Abonnement {
   id: number;
-  compagnie: string;
   plan: Plan;
   statut: StatutAbonnement;
-  date_debut: string;
-  date_fin: string;
-  prix_mensuel: number;
-  agences_max: number;
-  utilisateurs_max: number;
-  voyages_max: number | null;
+  dateDebut: string;
+  dateFin: string;
+  prixMensuel: number;
+  agencesMax: number;
+  utilisateursMax: number;
+  voyagesMax: number | null;
 }
 
 const PLANS: Record<Plan, { nom: string; prix: number; agences: number; utilisateurs: number; voyages: number | null; couleur: string; features: string[] }> = {
@@ -63,35 +65,68 @@ const COULEUR_STATUT: Record<StatutAbonnement, string> = {
   essai: "bg-violet-500/10 text-violet-600 border-violet-200",
 };
 
-const abonnementsMock: Abonnement[] = [
-  { id: 1, compagnie: "MuraVoyages SARL", plan: "enterprise", statut: "actif", date_debut: "2024-01-01", date_fin: "2024-12-31", prix_mensuel: 120000, agences_max: 999, utilisateurs_max: 999, voyages_max: null },
-  { id: 2, compagnie: "TransSénégal Express", plan: "business", statut: "actif", date_debut: "2024-03-01", date_fin: "2025-02-28", prix_mensuel: 45000, agences_max: 10, utilisateurs_max: 25, voyages_max: 500 },
-  { id: 3, compagnie: "DakarShuttle", plan: "starter", statut: "essai", date_debut: "2024-06-01", date_fin: "2024-06-30", prix_mensuel: 0, agences_max: 2, utilisateurs_max: 5, voyages_max: 100 },
-  { id: 4, compagnie: "BusKaolack", plan: "starter", statut: "expire", date_debut: "2023-10-01", date_fin: "2024-03-31", prix_mensuel: 15000, agences_max: 2, utilisateurs_max: 5, voyages_max: 100 },
-];
-
 export default function Subscriptions() {
   const { toast } = useToast();
-  const [abonnements, setAbonnements] = useState<Abonnement[]>(abonnementsMock);
+  const qc = useQueryClient();
+  const { data: me } = useMe(true);
   const [ouvert, setOuvert] = useState(false);
   const [planChoisi, setPlanChoisi] = useState<Plan>("business");
 
-  const revenus_mensuels = abonnements.filter(a => a.statut === "actif").reduce((s, a) => s + a.prix_mensuel, 0);
+  const { data: abonnements = [] } = useQuery({
+    queryKey: ["/api/subscriptions"],
+    queryFn: () => apiFetch<Abonnement[]>("/api/subscriptions"),
+  });
+
+  const compagnie = me?.company?.name ?? "Ma compagnie";
+  const courant = abonnements[0];
+
+  const revenus_mensuels = abonnements.filter(a => a.statut === "actif").reduce((s, a) => s + a.prixMensuel, 0);
   const actifs = abonnements.filter(a => a.statut === "actif").length;
   const essais = abonnements.filter(a => a.statut === "essai").length;
 
-  function renouveler(id: number) {
-    setAbonnements(prev => prev.map(a => a.id === id ? { ...a, statut: "actif" as StatutAbonnement, date_fin: new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10) } : a));
-    toast({ title: "Abonnement renouvelé pour 1 an" });
+  const updateSubscription = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Record<string, unknown> }) =>
+      apiFetch<Abonnement>(`/api/subscriptions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/subscriptions"] }),
+    onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+  });
+
+  function renouveler(a: Abonnement) {
+    const dateFin = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+    updateSubscription.mutate(
+      { id: a.id, body: { statut: "actif", dateFin } },
+      { onSuccess: () => toast({ title: "Abonnement renouvelé pour 1 an" }) },
+    );
+  }
+
+  function changerPlan() {
+    if (!courant) return;
+    const plan = PLANS[planChoisi];
+    const body: Record<string, unknown> = {
+      plan: planChoisi,
+      prixMensuel: plan.prix,
+      agencesMax: plan.agences,
+      utilisateursMax: plan.utilisateurs,
+    };
+    if (plan.voyages != null) body.voyagesMax = plan.voyages;
+    updateSubscription.mutate(
+      { id: courant.id, body },
+      {
+        onSuccess: () => {
+          toast({ title: `Plan ${plan.nom} attribué` });
+          setOuvert(false);
+        },
+      },
+    );
   }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Crown className="h-6 w-6 text-amber-500" /> Abonnements SaaS
+          <Crown className="h-6 w-6 text-amber-500" /> Abonnement SaaS
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">Gestion des plans et abonnements des compagnies</p>
+        <p className="text-muted-foreground text-sm mt-1">Votre plan et les options disponibles</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -112,10 +147,10 @@ export default function Subscriptions() {
       {/* Grille des plans */}
       <div className="grid gap-4 md:grid-cols-3">
         {(Object.entries(PLANS) as [Plan, typeof PLANS[Plan]][]).map(([planKey, plan]) => (
-          <Card key={planKey} className={planKey === "business" ? "border-primary/40 shadow-md" : ""}>
+          <Card key={planKey} className={planKey === courant?.plan ? "border-primary/40 shadow-md" : ""}>
             <CardHeader className="pb-3">
-              {planKey === "business" && (
-                <Badge className="w-fit mb-2 bg-primary text-primary-foreground">Populaire</Badge>
+              {planKey === courant?.plan && (
+                <Badge className="w-fit mb-2 bg-primary text-primary-foreground">Plan actuel</Badge>
               )}
               <CardTitle className={`text-xl ${plan.couleur}`}>{plan.nom}</CardTitle>
               <CardDescription>
@@ -137,12 +172,12 @@ export default function Subscriptions() {
         ))}
       </div>
 
-      {/* Liste des abonnements */}
+      {/* Abonnement de la compagnie */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Abonnements des compagnies</CardTitle>
-          <Button size="sm" onClick={() => setOuvert(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Attribuer un abonnement
+          <CardTitle>Mon abonnement</CardTitle>
+          <Button size="sm" disabled={!courant} onClick={() => { if (courant) setPlanChoisi(courant.plan); setOuvert(true); }}>
+            <Plus className="h-4 w-4 mr-1" /> Changer de plan
           </Button>
         </CardHeader>
         <CardContent>
@@ -160,42 +195,48 @@ export default function Subscriptions() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {abonnements.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{a.compagnie}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`font-semibold ${PLANS[a.plan].couleur}`}>{PLANS[a.plan].nom}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={COULEUR_STATUT[a.statut]}>
-                      {a.statut.charAt(0).toUpperCase() + a.statut.slice(1)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm">{formatDate(a.date_debut)}</TableCell>
-                  <TableCell className="text-sm">{formatDate(a.date_fin)}</TableCell>
-                  <TableCell className="font-medium">{a.statut === "essai" ? "Gratuit" : formatFCFA(a.prix_mensuel)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {a.agences_max === 999 ? "∞" : a.agences_max} agences · {a.utilisateurs_max === 999 ? "∞" : a.utilisateurs_max} users
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {(a.statut === "expire" || a.statut === "essai") && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => renouveler(a.id)}>
-                        <RefreshCw className="h-3 w-3" /> Renouveler
-                      </Button>
-                    )}
-                    {a.statut === "actif" && (
-                      <span className="text-xs text-emerald-600 flex items-center gap-1 justify-end">
-                        <CheckCircle2 className="h-3 w-3" /> Actif
-                      </span>
-                    )}
-                  </TableCell>
+              {abonnements.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Aucun abonnement</TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                abonnements.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{compagnie}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`font-semibold ${PLANS[a.plan].couleur}`}>{PLANS[a.plan].nom}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={COULEUR_STATUT[a.statut]}>
+                        {a.statut.charAt(0).toUpperCase() + a.statut.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{formatDate(a.dateDebut)}</TableCell>
+                    <TableCell className="text-sm">{formatDate(a.dateFin)}</TableCell>
+                    <TableCell className="font-medium">{a.statut === "essai" ? "Gratuit" : formatFCFA(a.prixMensuel)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {a.agencesMax === 999 ? "∞" : a.agencesMax} agences · {a.utilisateursMax === 999 ? "∞" : a.utilisateursMax} users
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {(a.statut === "expire" || a.statut === "essai") && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={updateSubscription.isPending} onClick={() => renouveler(a)}>
+                          <RefreshCw className="h-3 w-3" /> Renouveler
+                        </Button>
+                      )}
+                      {a.statut === "actif" && (
+                        <span className="text-xs text-emerald-600 flex items-center gap-1 justify-end">
+                          <CheckCircle2 className="h-3 w-3" /> Actif
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -204,7 +245,7 @@ export default function Subscriptions() {
       <Dialog open={ouvert} onOpenChange={setOuvert}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Attribuer un abonnement</DialogTitle>
+            <DialogTitle>Changer de plan</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
@@ -228,8 +269,8 @@ export default function Subscriptions() {
           </div>
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={() => setOuvert(false)}>Annuler</Button>
-            <Button onClick={() => { toast({ title: `Plan ${PLANS[planChoisi].nom} attribué` }); setOuvert(false); }}>
-              Confirmer
+            <Button disabled={!courant || updateSubscription.isPending} onClick={changerPlan}>
+              {updateSubscription.isPending ? "…" : "Confirmer"}
             </Button>
           </DialogFooter>
         </DialogContent>

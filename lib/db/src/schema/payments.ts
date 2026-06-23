@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),
   reservationId: integer("reservation_id").notNull(),
+  companyId: integer("company_id"),
   amount: numeric("amount").notNull().default("0"),
   method: text("method").notNull().default("cash"),
   status: text("status").notNull().default("pending"),

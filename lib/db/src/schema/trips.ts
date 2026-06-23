@@ -9,10 +9,11 @@ export const tripsTable = pgTable("trips", {
   arrivalDate: date("arrival_date", { mode: "string" }),
   arrivalTime: text("arrival_time"),
   destinationId: integer("destination_id").notNull(),
-  vehicleId: integer("vehicle_id").notNull(),
+  vehicleId: integer("vehicle_id"), // optionnel : un voyage n'a pas forcément un bus assigné
   driverId: integer("driver_id"),
   companyId: integer("company_id").notNull(),
   price: numeric("price").notNull().default("0"),
+  offerType: text("offer_type"), // type de l'offre (ex. VIP, classique, climatisé…)
   status: text("status").notNull().default("scheduled"),
   seatsAvailable: integer("seats_available").notNull().default(0),
   seatsTotal: integer("seats_total").notNull().default(0),

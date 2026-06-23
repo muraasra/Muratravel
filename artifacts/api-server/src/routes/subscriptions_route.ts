@@ -1,52 +1,49 @@
-﻿import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { Router } from "express";
+import { eq, and } from "drizzle-orm";
 import { db, subscriptionsTable } from "@workspace/db";
 import { z } from "zod";
+import { tenantCompanyId } from "../middlewares/auth";
 
 const router = Router();
 
-const CreateSubscriptionBody = z.object({
-  companyId: z.number().int(),
-  plan: z.enum(["starter", "business", "enterprise"]).default("starter"),
-  statut: z.enum(["essai", "actif", "expire", "suspendu"]).default("essai"),
-  dateDebut: z.string(),
-  dateFin: z.string(),
-  prixMensuel: z.number().default(0),
-  agencesMax: z.number().int().default(2),
-  utilisateursMax: z.number().int().default(5),
+const UpdateSubscriptionBody = z.object({
+  plan: z.enum(["starter", "business", "enterprise"]).optional(),
+  statut: z.enum(["essai", "actif", "expire", "suspendu"]).optional(),
+  dateFin: z.string().optional(),
+  prixMensuel: z.number().optional(),
+  agencesMax: z.number().int().optional(),
+  utilisateursMax: z.number().int().optional(),
   voyagesMax: z.number().int().optional(),
-  stripeSubscriptionId: z.string().optional(),
   notes: z.string().optional(),
 });
 
-router.get("/subscriptions", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(subscriptionsTable).orderBy(subscriptionsTable.createdAt);
-  res.json(rows.map(r => ({ ...r, prixMensuel: parseFloat(r.prixMensuel), createdAt: r.createdAt.toISOString() })));
+function serialize(s: typeof subscriptionsTable.$inferSelect) {
+  return { ...s, prixMensuel: parseFloat(s.prixMensuel), createdAt: s.createdAt.toISOString() };
+}
+
+// A company only ever has one subscription (created during onboarding) and can
+// only see / change its own.
+router.get("/subscriptions", async (req, res): Promise<void> => {
+  const rows = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.companyId, tenantCompanyId(req)));
+  res.json(rows.map(serialize));
 });
 
-router.get("/subscriptions/company/:companyId", async (req, res): Promise<void> => {
-  const companyId = parseInt(req.params.companyId);
-  const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.companyId, companyId));
+router.get("/subscriptions/current", async (req, res): Promise<void> => {
+  const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.companyId, tenantCompanyId(req)));
   if (!sub) { res.status(404).json({ error: "Subscription not found" }); return; }
-  res.json({ ...sub, prixMensuel: parseFloat(sub.prixMensuel), createdAt: sub.createdAt.toISOString() });
-});
-
-router.post("/subscriptions", async (req, res): Promise<void> => {
-  const parsed = CreateSubscriptionBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const [sub] = await db.insert(subscriptionsTable).values({ ...parsed.data, prixMensuel: String(parsed.data.prixMensuel) }).returning();
-  res.status(201).json({ ...sub, prixMensuel: parseFloat(sub.prixMensuel), createdAt: sub.createdAt.toISOString() });
+  res.json(serialize(sub));
 });
 
 router.patch("/subscriptions/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id);
-  const [sub] = await db.update(subscriptionsTable).set(req.body).where(eq(subscriptionsTable.id, id)).returning();
+  const parsed = UpdateSubscriptionBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const updateData: Record<string, unknown> = { ...parsed.data };
+  if (parsed.data.prixMensuel != null) updateData.prixMensuel = String(parsed.data.prixMensuel);
+  const [sub] = await db.update(subscriptionsTable).set(updateData)
+    .where(and(eq(subscriptionsTable.id, id), eq(subscriptionsTable.companyId, tenantCompanyId(req)))).returning();
   if (!sub) { res.status(404).json({ error: "Subscription not found" }); return; }
-  res.json({ ...sub, prixMensuel: parseFloat(sub.prixMensuel), createdAt: sub.createdAt.toISOString() });
+  res.json(serialize(sub));
 });
 
 export default router;
-

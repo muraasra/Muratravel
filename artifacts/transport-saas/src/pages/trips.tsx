@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useListTrips, useCreateTrip, useListDestinations, useListVehicles, useListUsers, useCancelTrip, useCloseTrip } from "@workspace/api-client-react";
+import { useListTrips, useListDestinations, useListVehicles, useListUsers, useCancelTrip, useCloseTrip } from "@workspace/api-client-react";
+import { apiFetch } from "@/lib/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,54 +20,64 @@ export default function Voyages() {
   const { data: destinations } = useListDestinations();
   const { data: vehicles } = useListVehicles();
   const { data: drivers } = useListUsers();
-  const createTrip = useCreateTrip();
   const cancelTrip = useCancelTrip();
   const closeTrip = useCloseTrip();
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const [ouvert, setOuvert] = useState(false);
-  const [form, setForm] = useState({
-    destinationId: "",
-    vehicleId: "",
-    driverId: "",
-    departureDate: "",
-    departureTime: "",
-    arrivalTime: "",
-    price: "",
-    notes: "",
-    companyId: "1",
-  });
+  const [saving, setSaving] = useState(false);
+  const emptyForm = {
+    destinationId: "", vehicleId: "", driverId: "", departureDate: "", departureTime: "",
+    arrivalTime: "", price: "", offerType: "", capacity: "", notes: "",
+    recurring: false, recurrenceEndDate: "",
+  };
+  const [form, setForm] = useState(emptyForm);
 
   const chauffeurs = drivers?.filter((u) => u.role === "driver") ?? [];
 
   async function soumettre(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.destinationId || !form.vehicleId || !form.departureDate || !form.departureTime || !form.price) {
-      toast({ title: "Champs requis manquants", variant: "destructive" });
+    // Vehicle is optional; if no vehicle, a capacity is required to size the trip.
+    if (!form.destinationId || !form.departureDate || !form.departureTime || !form.price) {
+      toast({ title: "Champs requis manquants", description: "Destination, date, heure et tarif sont obligatoires.", variant: "destructive" });
       return;
     }
+    if (!form.vehicleId && !form.capacity) {
+      toast({ title: "Capacité requise", description: "Sans véhicule, indiquez le nombre de places.", variant: "destructive" });
+      return;
+    }
+    if (form.recurring && !form.recurrenceEndDate) {
+      toast({ title: "Fin de période requise", description: "Indiquez la date de fin pour un voyage récurrent.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
     try {
-      await createTrip.mutateAsync({
-        data: {
+      const res = await apiFetch<{ created?: number }>("/api/trips", {
+        method: "POST",
+        body: JSON.stringify({
           destinationId: parseInt(form.destinationId),
-          vehicleId: parseInt(form.vehicleId),
-          driverId: form.driverId ? parseInt(form.driverId) : undefined,
+          vehicleId: form.vehicleId ? parseInt(form.vehicleId) : null,
+          driverId: form.driverId ? parseInt(form.driverId) : null,
           departureDate: form.departureDate,
           departureTime: form.departureTime,
-          arrivalTime: form.arrivalTime || undefined,
+          arrivalTime: form.arrivalTime || null,
           price: parseFloat(form.price),
-          notes: form.notes || undefined,
-          companyId: parseInt(form.companyId),
-          status: "scheduled",
-        },
+          offerType: form.offerType || null,
+          capacity: form.capacity ? parseInt(form.capacity) : null,
+          notes: form.notes || null,
+          recurring: form.recurring,
+          recurrenceEndDate: form.recurring ? form.recurrenceEndDate : undefined,
+        }),
       });
       qc.invalidateQueries({ queryKey: ["/api/trips"] });
-      toast({ title: "Voyage programmé avec succès" });
+      toast({ title: res?.created && res.created > 1 ? `${res.created} départs programmés` : "Voyage programmé avec succès" });
       setOuvert(false);
-      setForm({ destinationId: "", vehicleId: "", driverId: "", departureDate: "", departureTime: "", arrivalTime: "", price: "", notes: "", companyId: "1" });
-    } catch {
-      toast({ title: "Erreur lors de la création", variant: "destructive" });
+      setForm(emptyForm);
+    } catch (err) {
+      toast({ title: "Erreur lors de la création", description: err instanceof Error ? err.message : undefined, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -134,7 +145,7 @@ export default function Voyages() {
                     <TableCell className="font-medium">
                       {trip.originCity} → {trip.destinationCity}
                     </TableCell>
-                    <TableCell className="text-sm">{trip.vehicleLicensePlate}</TableCell>
+                    <TableCell className="text-sm">{trip.vehicleLicensePlate ?? <span className="text-muted-foreground italic">Sans bus</span>}</TableCell>
                     <TableCell>
                       <span className={trip.seatsAvailable === 0 ? "text-red-500 font-medium" : "text-emerald-600 font-medium"}>
                         {trip.seatsAvailable}
@@ -209,20 +220,31 @@ export default function Voyages() {
                 </Select>
               </div>
 
-              <div className="col-span-2">
-                <Label>Véhicule *</Label>
-                <Select value={form.vehicleId} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}>
+              <div>
+                <Label>Véhicule (optionnel)</Label>
+                <Select value={form.vehicleId || "none"} onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v === "none" ? "" : v }))}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Sélectionner un véhicule" />
+                    <SelectValue placeholder="Aucun (sans bus)" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Aucun (sans bus)</SelectItem>
                     {vehicles?.filter((v) => v.status === "available" || v.status === "in_service").map((v) => (
                       <SelectItem key={v.id} value={String(v.id)}>
-                        {v.licensePlate} — {v.brand} {v.model} ({v.seatCount} places)
+                        {v.licensePlate} — {v.brand} ({v.seatCount} places)
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label>Places {form.vehicleId ? "(auto)" : "*"}</Label>
+                <Input className="mt-1" type="number" placeholder={form.vehicleId ? "selon le véhicule" : "Ex. 50"} value={form.capacity} disabled={!!form.vehicleId} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} />
+              </div>
+
+              <div>
+                <Label>Type d'offre</Label>
+                <Input className="mt-1" placeholder="Ex. VIP, Classique…" value={form.offerType} onChange={(e) => setForm((f) => ({ ...f, offerType: e.target.value }))} />
               </div>
 
               <div>
@@ -261,6 +283,20 @@ export default function Voyages() {
                 <Input className="mt-1" type="time" value={form.arrivalTime} onChange={(e) => setForm((f) => ({ ...f, arrivalTime: e.target.value }))} />
               </div>
 
+              <div className="col-span-2 rounded-lg border p-3 bg-muted/20 space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={form.recurring} onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))} />
+                  Voyage récurrent — un départ chaque jour sur une période
+                </label>
+                {form.recurring && (
+                  <div>
+                    <Label className="text-xs">Jusqu'au (inclus) *</Label>
+                    <Input className="mt-1" type="date" min={form.departureDate || undefined} value={form.recurrenceEndDate} onChange={(e) => setForm((f) => ({ ...f, recurrenceEndDate: e.target.value }))} />
+                    <p className="text-xs text-muted-foreground mt-1">Le système crée automatiquement le même départ à {form.departureTime || "l'heure indiquée"} chaque jour, du {form.departureDate || "…"} jusqu'à cette date.</p>
+                  </div>
+                )}
+              </div>
+
               <div className="col-span-2">
                 <Label>Notes</Label>
                 <Input className="mt-1" placeholder="Informations complémentaires…" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
@@ -268,8 +304,8 @@ export default function Voyages() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOuvert(false)}>Annuler</Button>
-              <Button type="submit" disabled={createTrip.isPending}>
-                {createTrip.isPending ? "Enregistrement…" : "Programmer le voyage"}
+              <Button type="submit" disabled={saving}>
+                {saving ? "Enregistrement…" : "Programmer le voyage"}
               </Button>
             </DialogFooter>
           </form>

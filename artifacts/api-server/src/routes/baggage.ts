@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, baggageTable, reservationsTable, tripsTable } from "@workspace/db";
+import { db, baggageTable, reservationsTable } from "@workspace/db";
 import {
   CreateBaggageBody,
   UpdateBaggageBody,
@@ -12,6 +12,7 @@ import {
   UpdateBaggageResponse,
 } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
+import { tenantCompanyId } from "../middlewares/auth";
 
 const router = Router();
 
@@ -21,34 +22,23 @@ function serializeBaggage(b: typeof baggageTable.$inferSelect) {
 
 router.get("/baggage", async (req, res): Promise<void> => {
   const qp = ListBaggageQueryParams.safeParse(req.query);
-  const conditions = [];
-  if (qp.success) {
-    if (qp.data.reservationId != null) conditions.push(eq(baggageTable.reservationId, qp.data.reservationId));
-    if (qp.data.tripId != null) {
-      // Get all reservation IDs for this trip
-      const tripReservations = await db.select({ id: reservationsTable.id }).from(reservationsTable).where(eq(reservationsTable.tripId, qp.data.tripId));
-      const ids = tripReservations.map(r => r.id);
-      if (ids.length === 0) {
-        res.json([]);
-        return;
-      }
-    }
-  }
-  const rows = conditions.length
-    ? await db.select().from(baggageTable).where(and(...conditions))
-    : await db.select().from(baggageTable);
+  const conditions = [eq(baggageTable.companyId, tenantCompanyId(req))];
+  if (qp.success && qp.data.reservationId != null) conditions.push(eq(baggageTable.reservationId, qp.data.reservationId));
+  const rows = await db.select().from(baggageTable).where(and(...conditions));
   res.json(ListBaggageResponse.parse(rows.map(serializeBaggage)));
 });
 
 router.post("/baggage", async (req, res): Promise<void> => {
   const parsed = CreateBaggageBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const companyId = tenantCompanyId(req);
+  // The reservation must belong to the caller's company.
+  const [reservation] = await db.select().from(reservationsTable).where(and(eq(reservationsTable.id, parsed.data.reservationId), eq(reservationsTable.companyId, companyId)));
+  if (!reservation) { res.status(404).json({ error: "Reservation not found" }); return; }
   const trackingCode = `BAG-${randomBytes(4).toString("hex").toUpperCase()}`;
   const [bag] = await db.insert(baggageTable).values({
     ...parsed.data,
+    companyId,
     weight: String(parsed.data.weight),
     price: String(parsed.data.price),
     trackingCode,
@@ -58,37 +48,23 @@ router.post("/baggage", async (req, res): Promise<void> => {
 
 router.get("/baggage/:id", async (req, res): Promise<void> => {
   const params = GetBaggageParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [bag] = await db.select().from(baggageTable).where(eq(baggageTable.id, params.data.id));
-  if (!bag) {
-    res.status(404).json({ error: "Baggage not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [bag] = await db.select().from(baggageTable).where(and(eq(baggageTable.id, params.data.id), eq(baggageTable.companyId, tenantCompanyId(req))));
+  if (!bag) { res.status(404).json({ error: "Baggage not found" }); return; }
   res.json(GetBaggageResponse.parse(serializeBaggage(bag)));
 });
 
 router.patch("/baggage/:id", async (req, res): Promise<void> => {
   const params = UpdateBaggageParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateBaggageBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.weight != null) updateData.weight = String(parsed.data.weight);
   if (parsed.data.price != null) updateData.price = String(parsed.data.price);
-  const [bag] = await db.update(baggageTable).set(updateData).where(eq(baggageTable.id, params.data.id)).returning();
-  if (!bag) {
-    res.status(404).json({ error: "Baggage not found" });
-    return;
-  }
+  const [bag] = await db.update(baggageTable).set(updateData)
+    .where(and(eq(baggageTable.id, params.data.id), eq(baggageTable.companyId, tenantCompanyId(req)))).returning();
+  if (!bag) { res.status(404).json({ error: "Baggage not found" }); return; }
   res.json(UpdateBaggageResponse.parse(serializeBaggage(bag)));
 });
 

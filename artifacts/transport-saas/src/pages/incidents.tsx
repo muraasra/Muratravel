@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,7 @@ import { AlertTriangle, Plus, Luggage, MessageSquare, Clock, Truck } from "lucid
 
 type TypeIncident = "bagage_perdu" | "reclamation" | "retard" | "incident_vehicule";
 type StatutIncident = "ouvert" | "en_cours" | "resolu" | "ferme";
+type PrioriteIncident = "faible" | "normale" | "haute" | "critique";
 
 interface Incident {
   id: number;
@@ -21,11 +24,11 @@ interface Incident {
   titre: string;
   description: string;
   statut: StatutIncident;
-  priorite: "faible" | "normale" | "haute" | "critique";
-  rapporte_par: string;
-  voyage_ref?: string;
-  date: string;
-  date_resolution?: string;
+  priorite: PrioriteIncident;
+  rapportePar: string;
+  tripId?: number | null;
+  dateResolution?: string | null;
+  createdAt: string;
 }
 
 const LABEL_TYPE: Record<TypeIncident, string> = {
@@ -56,24 +59,21 @@ const COULEUR_PRIORITE: Record<string, string> = {
   faible: "bg-slate-500/10 text-slate-600 border-slate-200",
 };
 
-const incidentsMock: Incident[] = [
-  { id: 1, type: "bagage_perdu", titre: "Valise perdue vol Dakar-Ziguinchor", description: "Le passager signale que sa valise noire n'a pas été retrouvée à l'arrivée.", statut: "en_cours", priorite: "haute", rapporte_par: "Mamadou Diallo", voyage_ref: "VYG-2024-001", date: new Date(Date.now() - 3600000).toISOString() },
-  { id: 2, type: "reclamation", titre: "Réclamation - Retard 2h", description: "Le client demande un remboursement partiel suite au retard de 2h du voyage.", statut: "ouvert", priorite: "normale", rapporte_par: "Fatou Ndiaye", date: new Date(Date.now() - 86400000).toISOString() },
-  { id: 3, type: "retard", titre: "Retard Bus AB-5678", description: "Retard de 45 minutes dû aux embouteillages à l'entrée de Thiès.", statut: "resolu", priorite: "faible", rapporte_par: "Ibrahima Sow", voyage_ref: "VYG-2024-002", date: new Date(Date.now() - 172800000).toISOString(), date_resolution: new Date(Date.now() - 86400000).toISOString() },
-  { id: 4, type: "incident_vehicule", titre: "Crevaison Bus XY-9012", description: "Crevaison sur la route nationale 1 au km 45. Passagers transférés.", statut: "ferme", priorite: "critique", rapporte_par: "Ousmane Gueye", voyage_ref: "VYG-2024-003", date: new Date(Date.now() - 259200000).toISOString(), date_resolution: new Date(Date.now() - 172800000).toISOString() },
-];
-
 export default function Incidents() {
   const { toast } = useToast();
-  const [incidents, setIncidents] = useState<Incident[]>(incidentsMock);
+  const qc = useQueryClient();
   const [ouvert, setOuvert] = useState(false);
   const [form, setForm] = useState({
     type: "reclamation" as TypeIncident,
     titre: "",
     description: "",
-    priorite: "normale" as Incident["priorite"],
-    rapporte_par: "",
-    voyage_ref: "",
+    priorite: "normale" as PrioriteIncident,
+    rapportePar: "",
+  });
+
+  const { data: incidents = [], isLoading } = useQuery({
+    queryKey: ["/api/incidents"],
+    queryFn: () => apiFetch<Incident[]>("/api/incidents"),
   });
 
   const stats = {
@@ -83,27 +83,35 @@ export default function Incidents() {
     critique: incidents.filter(i => i.priorite === "critique" && i.statut !== "ferme").length,
   };
 
+  const createIncident = useMutation({
+    mutationFn: (body: { type: TypeIncident; titre: string; description: string; priorite: PrioriteIncident; rapportePar: string }) =>
+      apiFetch<Incident>("/api/incidents", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/incidents"] });
+      toast({ title: "Incident déclaré avec succès" });
+      setOuvert(false);
+      setForm({ type: "reclamation", titre: "", description: "", priorite: "normale", rapportePar: "" });
+    },
+    onError: (err: Error) => toast({ title: "Erreur lors de la déclaration", description: err.message, variant: "destructive" }),
+  });
+
+  const updateStatut = useMutation({
+    mutationFn: ({ id, statut }: { id: number; statut: StatutIncident }) =>
+      apiFetch<Incident>(`/api/incidents/${id}`, { method: "PATCH", body: JSON.stringify({ statut }) }),
+    onSuccess: (_data, { statut }) => {
+      qc.invalidateQueries({ queryKey: ["/api/incidents"] });
+      toast({ title: `Incident mis à jour → ${statut}` });
+    },
+    onError: (err: Error) => toast({ title: "Erreur lors de la mise à jour", description: err.message, variant: "destructive" }),
+  });
+
   function soumettre(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.titre || !form.description || !form.rapporte_par) {
+    if (!form.titre || !form.description || !form.rapportePar) {
       toast({ title: "Champs requis manquants", variant: "destructive" });
       return;
     }
-    const nouvelIncident: Incident = {
-      id: Date.now(),
-      ...form,
-      statut: "ouvert",
-      date: new Date().toISOString(),
-    };
-    setIncidents(prev => [nouvelIncident, ...prev]);
-    toast({ title: "Incident déclaré avec succès" });
-    setOuvert(false);
-    setForm({ type: "reclamation", titre: "", description: "", priorite: "normale", rapporte_par: "", voyage_ref: "" });
-  }
-
-  function changerStatut(id: number, statut: StatutIncident) {
-    setIncidents(prev => prev.map(i => i.id === id ? { ...i, statut, date_resolution: statut === "resolu" ? new Date().toISOString() : i.date_resolution } : i));
-    toast({ title: `Incident mis à jour → ${statut}` });
+    createIncident.mutate(form);
   }
 
   return (
@@ -151,45 +159,55 @@ export default function Incidents() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {incidents.map((inc) => (
-                <TableRow key={inc.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-sm">
-                      {ICONE_TYPE[inc.type]}
-                      {LABEL_TYPE[inc.type]}
-                    </div>
-                  </TableCell>
-                  <TableCell className="max-w-[200px]">
-                    <p className="font-medium truncate">{inc.titre}</p>
-                    <p className="text-xs text-muted-foreground truncate">{inc.description}</p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={COULEUR_PRIORITE[inc.priorite]}>
-                      {inc.priorite.charAt(0).toUpperCase() + inc.priorite.slice(1)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={COULEUR_STATUT[inc.statut]}>
-                      {inc.statut.replace("_", " ")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm">{inc.rapporte_par}</TableCell>
-                  <TableCell className="font-mono text-xs">{inc.voyage_ref || "—"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{formatDateHeure(inc.date)}</TableCell>
-                  <TableCell className="text-right">
-                    {inc.statut === "ouvert" && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => changerStatut(inc.id, "en_cours")}>
-                        Prendre en charge
-                      </Button>
-                    )}
-                    {inc.statut === "en_cours" && (
-                      <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-600 border-emerald-200" onClick={() => changerStatut(inc.id, "resolu")}>
-                        Marquer résolu
-                      </Button>
-                    )}
-                  </TableCell>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Chargement…</TableCell>
                 </TableRow>
-              ))}
+              ) : incidents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Aucun incident</TableCell>
+                </TableRow>
+              ) : (
+                incidents.map((inc) => (
+                  <TableRow key={inc.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5 text-sm">
+                        {ICONE_TYPE[inc.type]}
+                        {LABEL_TYPE[inc.type]}
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-[200px]">
+                      <p className="font-medium truncate">{inc.titre}</p>
+                      <p className="text-xs text-muted-foreground truncate">{inc.description}</p>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={COULEUR_PRIORITE[inc.priorite]}>
+                        {inc.priorite.charAt(0).toUpperCase() + inc.priorite.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={COULEUR_STATUT[inc.statut]}>
+                        {inc.statut.replace("_", " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{inc.rapportePar}</TableCell>
+                    <TableCell className="font-mono text-xs">{inc.tripId ? `#${inc.tripId}` : "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatDateHeure(inc.createdAt)}</TableCell>
+                    <TableCell className="text-right">
+                      {inc.statut === "ouvert" && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" disabled={updateStatut.isPending} onClick={() => updateStatut.mutate({ id: inc.id, statut: "en_cours" })}>
+                          Prendre en charge
+                        </Button>
+                      )}
+                      {inc.statut === "en_cours" && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-600 border-emerald-200" disabled={updateStatut.isPending} onClick={() => updateStatut.mutate({ id: inc.id, statut: "resolu" })}>
+                          Marquer résolu
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -217,7 +235,7 @@ export default function Incidents() {
               </div>
               <div>
                 <Label>Priorité</Label>
-                <Select value={form.priorite} onValueChange={(v) => setForm(f => ({ ...f, priorite: v as Incident["priorite"] }))}>
+                <Select value={form.priorite} onValueChange={(v) => setForm(f => ({ ...f, priorite: v as PrioriteIncident }))}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="faible">Faible</SelectItem>
@@ -235,18 +253,16 @@ export default function Incidents() {
                 <Label>Description *</Label>
                 <Textarea className="mt-1" rows={3} placeholder="Décrire l'incident en détail…" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               </div>
-              <div>
+              <div className="col-span-2">
                 <Label>Rapporté par *</Label>
-                <Input className="mt-1" placeholder="Nom de l'agent" value={form.rapporte_par} onChange={e => setForm(f => ({ ...f, rapporte_par: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Référence voyage</Label>
-                <Input className="mt-1" placeholder="VYG-2024-xxx" value={form.voyage_ref} onChange={e => setForm(f => ({ ...f, voyage_ref: e.target.value }))} />
+                <Input className="mt-1" placeholder="Nom de l'agent" value={form.rapportePar} onChange={e => setForm(f => ({ ...f, rapportePar: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOuvert(false)}>Annuler</Button>
-              <Button type="submit">Déclarer l'incident</Button>
+              <Button type="submit" disabled={createIncident.isPending}>
+                {createIncident.isPending ? "Déclaration…" : "Déclarer l'incident"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

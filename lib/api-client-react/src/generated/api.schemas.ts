@@ -432,7 +432,7 @@ export interface Trip {
   originCity?: string | null;
   /** @nullable */
   destinationCity?: string | null;
-  vehicleId: number;
+  vehicleId?: number | null;
   /** @nullable */
   vehicleLicensePlate?: string | null;
   /** @nullable */
@@ -457,7 +457,7 @@ export interface TripInput {
   /** @nullable */
   arrivalTime?: string | null;
   destinationId: number;
-  vehicleId: number;
+  vehicleId?: number | null;
   /** @nullable */
   driverId?: number | null;
   companyId: number;

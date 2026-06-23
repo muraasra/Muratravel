@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 export const baggageTable = pgTable("baggage", {
   id: serial("id").primaryKey(),
   reservationId: integer("reservation_id").notNull(),
+  companyId: integer("company_id"),
   trackingCode: text("tracking_code").notNull(),
   weight: numeric("weight").notNull().default("0"),
   type: text("type").notNull().default("standard"),

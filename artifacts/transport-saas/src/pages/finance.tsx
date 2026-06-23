@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,14 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatFCFA, formatDateHeure, METHODE_PAIEMENT } from "@/lib/fcfa";
 import {
   Wallet,
   Plus,
-  TrendingUp,
-  TrendingDown,
   ArrowUpRight,
   ArrowDownLeft,
   RefreshCw,
@@ -34,17 +34,15 @@ interface Transaction {
   description: string;
   methode: MethodePaiement;
   reference: string;
-  date: string;
-  agence?: string;
+  createdAt: string;
 }
 
-const transactionsMock: Transaction[] = [
-  { id: 1, type: "encaissement", montant: 45000, description: "Vente billets Dakar-Thiès", methode: "cash", reference: "ENC-001", date: new Date().toISOString(), agence: "Agence Centrale" },
-  { id: 2, type: "encaissement", montant: 30000, description: "Vente billets Dakar-Kaolack", methode: "mobile_money", reference: "ENC-002", date: new Date(Date.now() - 3600000).toISOString(), agence: "Agence Nord" },
-  { id: 3, type: "depense", montant: 15000, description: "Carburant Bus AB-1234", methode: "cash", reference: "DEP-001", date: new Date(Date.now() - 7200000).toISOString() },
-  { id: 4, type: "remboursement", montant: 5000, description: "Annulation réservation TKT-0042", methode: "mobile_money", reference: "REM-001", date: new Date(Date.now() - 86400000).toISOString() },
-  { id: 5, type: "encaissement", montant: 12000, description: "Frais bagages", methode: "cash", reference: "ENC-003", date: new Date(Date.now() - 86400000).toISOString() },
-];
+interface FinanceSummary {
+  encaissements: number;
+  depenses: number;
+  remboursements: number;
+  solde: number;
+}
 
 const ICONE_METHODE: Record<string, React.ReactNode> = {
   cash: <Banknote className="h-3.5 w-3.5" />,
@@ -67,7 +65,7 @@ const LABEL_TYPE: Record<TypeTransaction, string> = {
 
 export default function Finance() {
   const { toast } = useToast();
-  const [transactions, setTransactions] = useState<Transaction[]>(transactionsMock);
+  const qc = useQueryClient();
   const [ouvert, setOuvert] = useState(false);
   const [onglet, setOnglet] = useState("tout");
   const [form, setForm] = useState({
@@ -77,12 +75,34 @@ export default function Finance() {
     methode: "cash" as MethodePaiement,
   });
 
-  const total_encaissements = transactions.filter(t => t.type === "encaissement").reduce((s, t) => s + t.montant, 0);
-  const total_depenses = transactions.filter(t => t.type === "depense").reduce((s, t) => s + t.montant, 0);
-  const total_remboursements = transactions.filter(t => t.type === "remboursement").reduce((s, t) => s + t.montant, 0);
-  const solde = total_encaissements - total_depenses - total_remboursements;
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: ["/api/finance/transactions"],
+    queryFn: () => apiFetch<Transaction[]>("/api/finance/transactions"),
+  });
+  const { data: summary } = useQuery({
+    queryKey: ["/api/finance/summary"],
+    queryFn: () => apiFetch<FinanceSummary>("/api/finance/summary"),
+  });
+
+  const total_encaissements = summary?.encaissements ?? 0;
+  const total_depenses = summary?.depenses ?? 0;
+  const total_remboursements = summary?.remboursements ?? 0;
+  const solde = summary?.solde ?? 0;
 
   const filtre = onglet === "tout" ? transactions : transactions.filter(t => t.type === onglet as TypeTransaction);
+
+  const createTransaction = useMutation({
+    mutationFn: (body: { type: TypeTransaction; montant: number; description: string; methode: MethodePaiement }) =>
+      apiFetch<Transaction>("/api/finance/transactions", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/finance/transactions"] });
+      qc.invalidateQueries({ queryKey: ["/api/finance/summary"] });
+      toast({ title: "Transaction enregistrée" });
+      setOuvert(false);
+      setForm({ type: "encaissement", montant: "", description: "", methode: "cash" });
+    },
+    onError: (err: Error) => toast({ title: "Erreur lors de l'enregistrement", description: err.message, variant: "destructive" }),
+  });
 
   function soumettre(e: React.FormEvent) {
     e.preventDefault();
@@ -90,19 +110,12 @@ export default function Finance() {
       toast({ title: "Champs requis manquants", variant: "destructive" });
       return;
     }
-    const nouvelleTransaction: Transaction = {
-      id: Date.now(),
+    createTransaction.mutate({
       type: form.type,
       montant: parseFloat(form.montant),
       description: form.description,
       methode: form.methode,
-      reference: `${form.type.slice(0, 3).toUpperCase()}-${String(transactions.length + 1).padStart(3, "0")}`,
-      date: new Date().toISOString(),
-    };
-    setTransactions(prev => [nouvelleTransaction, ...prev]);
-    toast({ title: "Transaction enregistrée" });
-    setOuvert(false);
-    setForm({ type: "encaissement", montant: "", description: "", methode: "cash" });
+    });
   }
 
   return (
@@ -196,15 +209,18 @@ export default function Finance() {
                 <TableHead>Description</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Méthode</TableHead>
-                <TableHead>Agence</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtre.length === 0 ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucune transaction</TableCell>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Chargement…</TableCell>
+                </TableRow>
+              ) : filtre.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucune transaction</TableCell>
                 </TableRow>
               ) : (
                 filtre.map((t) => (
@@ -222,8 +238,7 @@ export default function Finance() {
                         {METHODE_PAIEMENT[t.methode]}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{t.agence || "—"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{formatDateHeure(t.date)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatDateHeure(t.createdAt)}</TableCell>
                     <TableCell className={`text-right font-bold ${t.type === "encaissement" ? "text-emerald-600" : t.type === "depense" ? "text-red-600" : "text-amber-600"}`}>
                       {t.type === "encaissement" ? "+" : "-"}{formatFCFA(t.montant)}
                     </TableCell>
@@ -276,7 +291,9 @@ export default function Finance() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOuvert(false)}>Annuler</Button>
-              <Button type="submit">Enregistrer</Button>
+              <Button type="submit" disabled={createTransaction.isPending}>
+                {createTransaction.isPending ? "Enregistrement…" : "Enregistrer"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

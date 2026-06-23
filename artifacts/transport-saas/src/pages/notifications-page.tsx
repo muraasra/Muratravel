@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateHeure } from "@/lib/fcfa";
-import { Bell, Plus, Mail, MessageSquare, Send, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { Bell, Send, Mail, MessageSquare, CheckCircle2, Clock, XCircle } from "lucide-react";
 
 type Canal = "sms" | "email" | "whatsapp";
 type StatutNotif = "envoyee" | "en_attente" | "echec";
@@ -21,18 +23,27 @@ type Declencheur = "confirmation_reservation" | "modification_voyage" | "annulat
 interface Notification {
   id: number;
   canal: Canal;
-  declencheur: Declencheur;
+  declencheur: string;
   destinataire: string;
   message: string;
   statut: StatutNotif;
-  date: string;
+  createdAt: string;
 }
 
-interface ConfigNotif {
-  confirmation_reservation: { sms: boolean; email: boolean; whatsapp: boolean };
-  modification_voyage: { sms: boolean; email: boolean; whatsapp: boolean };
-  annulation_voyage: { sms: boolean; email: boolean; whatsapp: boolean };
-  rappel_depart: { sms: boolean; email: boolean; whatsapp: boolean };
+// The API stores the config as flat booleans, and only models the channels that
+// are actually wired per event (e.g. no WhatsApp for "modification"). Drive the
+// UI from this declarative mapping so we never render a toggle that the backend
+// cannot persist.
+interface NotifConfig {
+  confirmationSms: boolean;
+  confirmationEmail: boolean;
+  confirmationWhatsapp: boolean;
+  modificationSms: boolean;
+  modificationEmail: boolean;
+  annulationSms: boolean;
+  annulationEmail: boolean;
+  rappelSms: boolean;
+  rappelWhatsapp: boolean;
 }
 
 const LABEL_DECLENCHEUR: Record<Declencheur, string> = {
@@ -42,6 +53,13 @@ const LABEL_DECLENCHEUR: Record<Declencheur, string> = {
   rappel_depart: "Rappel départ",
   manuel: "Envoi manuel",
 };
+
+const CONFIG_SECTIONS: { label: string; channels: Partial<Record<Canal, keyof NotifConfig>> }[] = [
+  { label: LABEL_DECLENCHEUR.confirmation_reservation, channels: { sms: "confirmationSms", email: "confirmationEmail", whatsapp: "confirmationWhatsapp" } },
+  { label: LABEL_DECLENCHEUR.modification_voyage, channels: { sms: "modificationSms", email: "modificationEmail" } },
+  { label: LABEL_DECLENCHEUR.annulation_voyage, channels: { sms: "annulationSms", email: "annulationEmail" } },
+  { label: LABEL_DECLENCHEUR.rappel_depart, channels: { sms: "rappelSms", whatsapp: "rappelWhatsapp" } },
+];
 
 const ICONE_CANAL: Record<Canal, React.ReactNode> = {
   sms: <MessageSquare className="h-3.5 w-3.5" />,
@@ -61,32 +79,57 @@ const ICONE_STATUT: Record<StatutNotif, React.ReactNode> = {
   echec: <XCircle className="h-3 w-3" />,
 };
 
-const notifsMock: Notification[] = [
-  { id: 1, canal: "sms", declencheur: "confirmation_reservation", destinataire: "+221 77 123 4567", message: "Votre réservation TKT-A1B2 est confirmée. Départ Dakar→Thiès le 22/06 à 08:00.", statut: "envoyee", date: new Date(Date.now() - 1800000).toISOString() },
-  { id: 2, canal: "email", declencheur: "confirmation_reservation", destinataire: "client@email.com", message: "Confirmation de votre réservation MuraTravel...", statut: "envoyee", date: new Date(Date.now() - 1800000).toISOString() },
-  { id: 3, canal: "whatsapp", declencheur: "rappel_depart", destinataire: "+221 78 987 6543", message: "Rappel: Votre départ est dans 2h. Arrivez 30min avant.", statut: "en_attente", date: new Date(Date.now() - 900000).toISOString() },
-  { id: 4, canal: "sms", declencheur: "annulation_voyage", destinataire: "+221 76 555 4321", message: "Votre voyage VYG-002 a été annulé. Remboursement en cours.", statut: "echec", date: new Date(Date.now() - 3600000).toISOString() },
-];
-
 export default function NotificationsPage() {
   const { toast } = useToast();
-  const [notifs, setNotifs] = useState<Notification[]>(notifsMock);
+  const qc = useQueryClient();
   const [ouvert, setOuvert] = useState(false);
   const [onglet, setOnglet] = useState("historique");
-  const [config, setConfig] = useState<ConfigNotif>({
-    confirmation_reservation: { sms: true, email: true, whatsapp: false },
-    modification_voyage: { sms: true, email: true, whatsapp: true },
-    annulation_voyage: { sms: true, email: true, whatsapp: true },
-    rappel_depart: { sms: true, email: false, whatsapp: true },
-  });
+  const [config, setConfig] = useState<NotifConfig | null>(null);
   const [form, setForm] = useState({
     canal: "sms" as Canal,
     destinataire: "",
     message: "",
   });
 
-  function toggleConfig(event: keyof ConfigNotif, canal: Canal) {
-    setConfig(c => ({ ...c, [event]: { ...c[event], [canal]: !c[event][canal] } }));
+  const { data: notifs = [] } = useQuery({
+    queryKey: ["/api/notifications"],
+    queryFn: () => apiFetch<Notification[]>("/api/notifications"),
+  });
+
+  const { data: configData } = useQuery({
+    queryKey: ["/api/notifications/config"],
+    queryFn: () => apiFetch<NotifConfig>("/api/notifications/config"),
+  });
+
+  // Seed the editable draft once the server config arrives.
+  useEffect(() => {
+    if (configData) setConfig(configData);
+  }, [configData]);
+
+  const envoyerNotif = useMutation({
+    mutationFn: (body: { canal: Canal; declencheur: string; destinataire: string; message: string }) =>
+      apiFetch<Notification>("/api/notifications", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["/api/notifications"] });
+      toast({ title: `Notification ${vars.canal.toUpperCase()} en file d'envoi` });
+      setOuvert(false);
+      setForm({ canal: "sms", destinataire: "", message: "" });
+    },
+    onError: (err: Error) => toast({ title: "Erreur lors de l'envoi", description: err.message, variant: "destructive" }),
+  });
+
+  const saveConfig = useMutation({
+    mutationFn: (body: NotifConfig) =>
+      apiFetch<NotifConfig>("/api/notifications/config", { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/notifications/config"] });
+      toast({ title: "Configuration sauvegardée" });
+    },
+    onError: (err: Error) => toast({ title: "Erreur lors de la sauvegarde", description: err.message, variant: "destructive" }),
+  });
+
+  function toggleField(field: keyof NotifConfig) {
+    setConfig(c => (c ? { ...c, [field]: !c[field] } : c));
   }
 
   function envoyerManuel(e: React.FormEvent) {
@@ -95,19 +138,7 @@ export default function NotificationsPage() {
       toast({ title: "Champs requis manquants", variant: "destructive" });
       return;
     }
-    const nouvelleNotif: Notification = {
-      id: Date.now(),
-      canal: form.canal,
-      declencheur: "manuel",
-      destinataire: form.destinataire,
-      message: form.message,
-      statut: "en_attente",
-      date: new Date().toISOString(),
-    };
-    setNotifs(prev => [nouvelleNotif, ...prev]);
-    toast({ title: `Notification ${form.canal.toUpperCase()} en file d'envoi` });
-    setOuvert(false);
-    setForm({ canal: "sms", destinataire: "", message: "" });
+    envoyerNotif.mutate({ ...form, declencheur: "manuel" });
   }
 
   const stats = {
@@ -173,25 +204,31 @@ export default function NotificationsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {notifs.map((n) => (
-                  <TableRow key={n.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5 text-sm capitalize">
-                        {ICONE_CANAL[n.canal]}{n.canal.toUpperCase()}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">{LABEL_DECLENCHEUR[n.declencheur]}</TableCell>
-                    <TableCell className="text-sm font-mono">{n.destinataire}</TableCell>
-                    <TableCell className="max-w-[250px] truncate text-sm text-muted-foreground">{n.message}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`${COULEUR_STATUT[n.statut]} gap-1`}>
-                        {ICONE_STATUT[n.statut]}
-                        {n.statut.replace("_", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatDateHeure(n.date)}</TableCell>
+                {notifs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Aucune notification</TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  notifs.map((n) => (
+                    <TableRow key={n.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 text-sm capitalize">
+                          {ICONE_CANAL[n.canal]}{n.canal.toUpperCase()}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">{LABEL_DECLENCHEUR[n.declencheur as Declencheur] ?? n.declencheur}</TableCell>
+                      <TableCell className="text-sm font-mono">{n.destinataire}</TableCell>
+                      <TableCell className="max-w-[250px] truncate text-sm text-muted-foreground">{n.message}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`${COULEUR_STATUT[n.statut]} gap-1`}>
+                          {ICONE_STATUT[n.statut]}
+                          {n.statut.replace("_", " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatDateHeure(n.createdAt)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -202,25 +239,44 @@ export default function NotificationsPage() {
         <Card>
           <CardHeader><CardTitle>Envois automatiques par événement</CardTitle></CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              {(Object.entries(config) as [keyof ConfigNotif, ConfigNotif[keyof ConfigNotif]][]).map(([event, canaux]) => (
-                <div key={event} className="border rounded-lg p-4">
-                  <p className="font-medium mb-3">{LABEL_DECLENCHEUR[event as Declencheur]}</p>
-                  <div className="flex gap-8">
-                    {(["sms", "email", "whatsapp"] as Canal[]).map((canal) => (
-                      <div key={canal} className="flex items-center gap-2">
-                        <Switch checked={canaux[canal]} onCheckedChange={() => toggleConfig(event, canal)} />
-                        <div className="flex items-center gap-1.5 text-sm">
-                          {ICONE_CANAL[canal]}
-                          <span className="capitalize">{canal}</span>
+            {!config ? (
+              <p className="text-sm text-muted-foreground py-4">Chargement de la configuration…</p>
+            ) : (
+              <div className="space-y-6">
+                {CONFIG_SECTIONS.map((section) => (
+                  <div key={section.label} className="border rounded-lg p-4">
+                    <p className="font-medium mb-3">{section.label}</p>
+                    <div className="flex gap-8">
+                      {(Object.entries(section.channels) as [Canal, keyof NotifConfig][]).map(([canal, field]) => (
+                        <div key={canal} className="flex items-center gap-2">
+                          <Switch checked={config[field]} onCheckedChange={() => toggleField(field)} />
+                          <div className="flex items-center gap-1.5 text-sm">
+                            {ICONE_CANAL[canal]}
+                            <span className="capitalize">{canal}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-              <Button onClick={() => toast({ title: "Configuration sauvegardée" })}>Sauvegarder la configuration</Button>
-            </div>
+                ))}
+                <Button
+                  disabled={saveConfig.isPending}
+                  onClick={() => saveConfig.mutate({
+                    confirmationSms: config.confirmationSms,
+                    confirmationEmail: config.confirmationEmail,
+                    confirmationWhatsapp: config.confirmationWhatsapp,
+                    modificationSms: config.modificationSms,
+                    modificationEmail: config.modificationEmail,
+                    annulationSms: config.annulationSms,
+                    annulationEmail: config.annulationEmail,
+                    rappelSms: config.rappelSms,
+                    rappelWhatsapp: config.rappelWhatsapp,
+                  })}
+                >
+                  {saveConfig.isPending ? "Sauvegarde…" : "Sauvegarder la configuration"}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -255,7 +311,9 @@ export default function NotificationsPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOuvert(false)}>Annuler</Button>
-              <Button type="submit" className="gap-1"><Send className="h-3.5 w-3.5" /> Envoyer</Button>
+              <Button type="submit" className="gap-1" disabled={envoyerNotif.isPending}>
+                <Send className="h-3.5 w-3.5" /> {envoyerNotif.isPending ? "Envoi…" : "Envoyer"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -111,8 +112,12 @@ export default function Login() {
           </CardContent>
         </Card>
 
+        <p className="text-center text-sm text-muted-foreground">
+          Pas encore de compagnie ?{" "}
+          <Link href="/signup" className="text-primary font-medium hover:underline">Créer la mienne</Link>
+        </p>
         <p className="text-center text-xs text-muted-foreground">
-          Accès réservé aux utilisateurs autorisés.
+          <Link href="/" className="hover:text-foreground">← Retour à l'accueil</Link>
         </p>
       </div>
     </div>

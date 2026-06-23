@@ -1,7 +1,8 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { eq, desc } from "drizzle-orm";
 import { db, auditLogsTable } from "@workspace/db";
 import { z } from "zod";
+import { tenantCompanyId } from "../middlewares/auth";
 
 const router = Router();
 
@@ -12,7 +13,6 @@ const CreateAuditLogBody = z.object({
   userId: z.string().optional(),
   userEmail: z.string().optional(),
   userName: z.string().optional(),
-  companyId: z.number().int().optional(),
   ipAddress: z.string().optional(),
   userAgent: z.string().optional(),
   statut: z.enum(["succes", "echec"]).default("succes"),
@@ -20,24 +20,21 @@ const CreateAuditLogBody = z.object({
 });
 
 router.get("/audit", async (req, res): Promise<void> => {
-  const companyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
   const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
-  const rows = companyId
-    ? await db.select().from(auditLogsTable).where(eq(auditLogsTable.companyId, companyId)).orderBy(desc(auditLogsTable.createdAt)).limit(limit)
-    : await db.select().from(auditLogsTable).orderBy(desc(auditLogsTable.createdAt)).limit(limit);
+  const rows = await db.select().from(auditLogsTable)
+    .where(eq(auditLogsTable.companyId, tenantCompanyId(req)))
+    .orderBy(desc(auditLogsTable.createdAt)).limit(limit);
   res.json(rows.map(r => ({ ...r, createdAt: r.createdAt.toISOString() })));
 });
 
 router.post("/audit", async (req, res): Promise<void> => {
   const parsed = CreateAuditLogBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const ipAddress = req.ip || req.headers["x-forwarded-for"] as string || "unknown";
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const ipAddress = req.ip || (req.headers["x-forwarded-for"] as string) || "unknown";
   const userAgent = req.headers["user-agent"] || "unknown";
   const [log] = await db.insert(auditLogsTable).values({
     ...parsed.data,
+    companyId: tenantCompanyId(req),
     ipAddress: parsed.data.ipAddress ?? ipAddress,
     userAgent: parsed.data.userAgent ?? userAgent,
   }).returning();
@@ -45,4 +42,3 @@ router.post("/audit", async (req, res): Promise<void> => {
 });
 
 export default router;
-

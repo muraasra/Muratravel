@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,6 +15,10 @@ export const companiesTable = pgTable("companies", {
   currency: text("currency").notNull().default("USD"),
   language: text("language").notNull().default("fr"),
   status: text("status").notNull().default("active"),
+  // Réservation publique : lien partageable + activation + personnalisation du formulaire.
+  bookingSlug: text("booking_slug").unique(),
+  bookingEnabled: boolean("booking_enabled").notNull().default(true),
+  bookingConfig: jsonb("booking_config"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

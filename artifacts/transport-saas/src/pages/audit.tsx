@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -16,20 +18,21 @@ import {
   Trash2,
   Eye,
   RefreshCw,
+  Activity,
 } from "lucide-react";
 
 type ActionType = "connexion" | "deconnexion" | "creation" | "modification" | "suppression" | "consultation" | "export";
 
 interface LogEntry {
   id: number;
-  action: ActionType;
+  action: string;
   module: string;
   description: string;
-  utilisateur: string;
-  email: string;
-  ip: string;
-  date: string;
+  userName: string | null;
+  userEmail: string | null;
+  ipAddress: string | null;
   statut: "succes" | "echec";
+  createdAt: string;
 }
 
 const ICONE_ACTION: Record<ActionType, React.ReactNode> = {
@@ -52,37 +55,33 @@ const COULEUR_ACTION: Record<ActionType, string> = {
   export: "bg-cyan-500/10 text-cyan-600 border-cyan-200",
 };
 
-const logsMock: LogEntry[] = [
-  { id: 1, action: "connexion", module: "Auth", description: "Connexion via Google OAuth", utilisateur: "Amadou Diallo", email: "amadou@muravoyages.com", ip: "41.82.12.45", date: new Date(Date.now() - 300000).toISOString(), statut: "succes" },
-  { id: 2, action: "creation", module: "Réservations", description: "Nouvelle réservation TKT-A1B2C3 créée — Mamadou Ndiaye", utilisateur: "Fatou Sarr", email: "fatou@muravoyages.com", ip: "41.82.12.46", date: new Date(Date.now() - 600000).toISOString(), statut: "succes" },
-  { id: 3, action: "modification", module: "Voyages", description: "Statut voyage VYG-2024-001 → Embarquement", utilisateur: "Ibrahima Sy", email: "ibrahima@muravoyages.com", ip: "196.10.15.72", date: new Date(Date.now() - 1800000).toISOString(), statut: "succes" },
-  { id: 4, action: "connexion", module: "Auth", description: "Tentative de connexion échouée — mot de passe incorrect", utilisateur: "Inconnu", email: "hacker@test.com", ip: "192.168.1.1", date: new Date(Date.now() - 3600000).toISOString(), statut: "echec" },
-  { id: 5, action: "export", module: "Rapports", description: "Export PDF rapport mensuel juin 2024", utilisateur: "Amadou Diallo", email: "amadou@muravoyages.com", ip: "41.82.12.45", date: new Date(Date.now() - 7200000).toISOString(), statut: "succes" },
-  { id: 6, action: "suppression", module: "Véhicules", description: "Suppression véhicule AB-5678 (retraité)", utilisateur: "Admin Système", email: "admin@muravoyages.com", ip: "127.0.0.1", date: new Date(Date.now() - 86400000).toISOString(), statut: "succes" },
-  { id: 7, action: "modification", module: "Compagnies", description: "Mise à jour logo compagnie MuraVoyages", utilisateur: "Amadou Diallo", email: "amadou@muravoyages.com", ip: "41.82.12.45", date: new Date(Date.now() - 172800000).toISOString(), statut: "succes" },
-  { id: 8, action: "deconnexion", module: "Auth", description: "Déconnexion utilisateur", utilisateur: "Fatou Sarr", email: "fatou@muravoyages.com", ip: "41.82.12.46", date: new Date(Date.now() - 86400000).toISOString(), statut: "succes" },
-];
+const DEFAUT_COULEUR = "bg-slate-500/10 text-slate-600 border-slate-200";
 
 export default function Audit() {
   const [recherche, setRecherche] = useState("");
   const [filtreAction, setFiltreAction] = useState("tout");
   const [filtreStatut, setFiltreStatut] = useState("tout");
 
-  const logs = logsMock.filter((l) => {
+  const { data: tousLogs = [], isLoading } = useQuery({
+    queryKey: ["/api/audit"],
+    queryFn: () => apiFetch<LogEntry[]>("/api/audit"),
+  });
+
+  const logs = tousLogs.filter((l) => {
     const matchRecherche = !recherche ||
       l.description.toLowerCase().includes(recherche.toLowerCase()) ||
-      l.utilisateur.toLowerCase().includes(recherche.toLowerCase()) ||
-      l.email.toLowerCase().includes(recherche.toLowerCase());
+      (l.userName ?? "").toLowerCase().includes(recherche.toLowerCase()) ||
+      (l.userEmail ?? "").toLowerCase().includes(recherche.toLowerCase());
     const matchAction = filtreAction === "tout" || l.action === filtreAction;
     const matchStatut = filtreStatut === "tout" || l.statut === filtreStatut;
     return matchRecherche && matchAction && matchStatut;
   });
 
   const stats = {
-    total: logsMock.length,
-    connexions: logsMock.filter(l => l.action === "connexion").length,
-    echecs: logsMock.filter(l => l.statut === "echec").length,
-    utilisateurs_uniques: new Set(logsMock.map(l => l.email)).size,
+    total: tousLogs.length,
+    connexions: tousLogs.filter(l => l.action === "connexion").length,
+    echecs: tousLogs.filter(l => l.statut === "echec").length,
+    utilisateurs_uniques: new Set(tousLogs.map(l => l.userEmail).filter(Boolean)).size,
   };
 
   return (
@@ -157,7 +156,11 @@ export default function Audit() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logs.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Chargement…</TableCell>
+                </TableRow>
+              ) : logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Aucun résultat</TableCell>
                 </TableRow>
@@ -165,24 +168,24 @@ export default function Audit() {
                 logs.map((log) => (
                   <TableRow key={log.id} className={log.statut === "echec" ? "bg-red-50/30" : ""}>
                     <TableCell>
-                      <Badge variant="outline" className={`${COULEUR_ACTION[log.action]} gap-1 text-xs`}>
-                        {ICONE_ACTION[log.action]}
+                      <Badge variant="outline" className={`${COULEUR_ACTION[log.action as ActionType] ?? DEFAUT_COULEUR} gap-1 text-xs`}>
+                        {ICONE_ACTION[log.action as ActionType] ?? <Activity className="h-3.5 w-3.5" />}
                         {log.action}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm font-medium">{log.module}</TableCell>
                     <TableCell className="max-w-[280px] truncate text-sm">{log.description}</TableCell>
                     <TableCell>
-                      <div className="text-sm font-medium">{log.utilisateur}</div>
-                      <div className="text-xs text-muted-foreground">{log.email}</div>
+                      <div className="text-sm font-medium">{log.userName ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">{log.userEmail ?? ""}</div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{log.ip}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{log.ipAddress ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant={log.statut === "succes" ? "default" : "destructive"} className="text-xs">
                         {log.statut === "succes" ? "Succès" : "Échec"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDateHeure(log.date)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatDateHeure(log.createdAt)}</TableCell>
                   </TableRow>
                 ))
               )}

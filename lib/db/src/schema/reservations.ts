@@ -1,10 +1,11 @@
-import { pgTable, serial, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, numeric, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const reservationsTable = pgTable("reservations", {
   id: serial("id").primaryKey(),
   tripId: integer("trip_id").notNull(),
+  companyId: integer("company_id"),
   passengerName: text("passenger_name").notNull(),
   passengerPhone: text("passenger_phone").notNull(),
   passengerEmail: text("passenger_email"),
@@ -16,6 +17,7 @@ export const reservationsTable = pgTable("reservations", {
   agencyId: integer("agency_id"),
   agentId: integer("agent_id"),
   notes: text("notes"),
+  customData: jsonb("custom_data"), // réponses aux champs personnalisés du formulaire
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

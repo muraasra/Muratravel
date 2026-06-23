@@ -12,6 +12,7 @@ import {
   GetVehicleResponse,
   UpdateVehicleResponse,
 } from "@workspace/api-zod";
+import { tenantCompanyId } from "../middlewares/auth";
 
 const router = Router();
 
@@ -21,71 +22,44 @@ function serializeVehicle(v: typeof vehiclesTable.$inferSelect) {
 
 router.get("/vehicles", async (req, res): Promise<void> => {
   const qp = ListVehiclesQueryParams.safeParse(req.query);
-  const conditions = [];
-  if (qp.success) {
-    if (qp.data.companyId != null) conditions.push(eq(vehiclesTable.companyId, qp.data.companyId));
-    if (qp.data.status != null) conditions.push(eq(vehiclesTable.status, qp.data.status));
-  }
-  const rows = conditions.length
-    ? await db.select().from(vehiclesTable).where(and(...conditions))
-    : await db.select().from(vehiclesTable);
+  const conditions = [eq(vehiclesTable.companyId, tenantCompanyId(req))];
+  if (qp.success && qp.data.status != null) conditions.push(eq(vehiclesTable.status, qp.data.status));
+  const rows = await db.select().from(vehiclesTable).where(and(...conditions));
   res.json(ListVehiclesResponse.parse(rows.map(serializeVehicle)));
 });
 
 router.post("/vehicles", async (req, res): Promise<void> => {
   const parsed = CreateVehicleBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const [vehicle] = await db.insert(vehiclesTable).values(parsed.data).returning();
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [vehicle] = await db.insert(vehiclesTable).values({ ...parsed.data, companyId: tenantCompanyId(req) }).returning();
   res.status(201).json(GetVehicleResponse.parse(serializeVehicle(vehicle)));
 });
 
 router.get("/vehicles/:id", async (req, res): Promise<void> => {
   const params = GetVehicleParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [vehicle] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, params.data.id));
-  if (!vehicle) {
-    res.status(404).json({ error: "Vehicle not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [vehicle] = await db.select().from(vehiclesTable).where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.companyId, tenantCompanyId(req))));
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
   res.json(GetVehicleResponse.parse(serializeVehicle(vehicle)));
 });
 
 router.patch("/vehicles/:id", async (req, res): Promise<void> => {
   const params = UpdateVehicleParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateVehicleBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const [vehicle] = await db.update(vehiclesTable).set(parsed.data).where(eq(vehiclesTable.id, params.data.id)).returning();
-  if (!vehicle) {
-    res.status(404).json({ error: "Vehicle not found" });
-    return;
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [vehicle] = await db.update(vehiclesTable).set(parsed.data)
+    .where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.companyId, tenantCompanyId(req)))).returning();
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
   res.json(UpdateVehicleResponse.parse(serializeVehicle(vehicle)));
 });
 
 router.delete("/vehicles/:id", async (req, res): Promise<void> => {
   const params = DeleteVehicleParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [vehicle] = await db.delete(vehiclesTable).where(eq(vehiclesTable.id, params.data.id)).returning();
-  if (!vehicle) {
-    res.status(404).json({ error: "Vehicle not found" });
-    return;
-  }
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const [vehicle] = await db.delete(vehiclesTable)
+    .where(and(eq(vehiclesTable.id, params.data.id), eq(vehiclesTable.companyId, tenantCompanyId(req)))).returning();
+  if (!vehicle) { res.status(404).json({ error: "Vehicle not found" }); return; }
   res.sendStatus(204);
 });
 
